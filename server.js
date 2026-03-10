@@ -44,14 +44,15 @@ function getTopRoomsForUser(userProfile) {
     let availableRooms = [];
 
     for (const [roomId, room] of rooms.entries()) {
+        // Private rooms are never shown in the lobby
+        if (room.isPrivate) continue;
+
         let score = 0;
 
-        // 1. Exact Genre Match gives a massive boost
         if (room.genre === userProfile.genre) {
             score += 10000;
         }
 
-        // 2. Goal proximity (subtract the difference so closer goals score higher)
         const difference = Math.abs(room.goal - userProfile.goal);
         score -= difference;
 
@@ -66,7 +67,6 @@ function getTopRoomsForUser(userProfile) {
         });
     }
 
-    // Sort descending (highest score first) and return top 10
     availableRooms.sort((a, b) => b.score - a.score);
     return availableRooms.slice(0, 10);
 }
@@ -101,6 +101,7 @@ function broadcastRoomState(roomId) {
             isHost: room.hostId === userData.id,
             duration: room.duration,
             shareLog: room.shareLog,
+            isPrivate: room.isPrivate,
             status: room.status,
             users: usersList,
             chat: room.chat
@@ -124,7 +125,7 @@ serve({
 
             // --- LOBBY PHASE ---
             if (data.type === 'JOIN_LOBBY') {
-                ws.data.roomId = null; // Clear room state
+                ws.data.roomId = null;
                 lobbyUsers.set(ws, {
                     id: ws.data.id,
                     name: data.user.name,
@@ -133,13 +134,11 @@ serve({
                     displayMode: data.user.displayMode,
                     shareMyLog: data.user.shareMyLog
                 });
-                // Send them their customized matches immediately
                 ws.send(JSON.stringify({ type: 'LOBBY_STATE', rooms: getTopRoomsForUser(lobbyUsers.get(ws)) }));
             }
 
             // --- ROOM PHASE ---
             if (data.type === 'CREATE_ROOM' || data.type === 'JOIN_ROOM') {
-                // Remove from lobby pool if they were in it
                 if (lobbyUsers.has(ws)) {
                     lobbyUsers.delete(ws);
                 }
@@ -150,8 +149,9 @@ serve({
                     rooms.set(roomId, {
                         hostId: ws.data.id,
                         hostName: data.user.name,
-                        genre: data.user.genre, // Track room genre
-                        goal: parseInt(data.user.goal) || 500, // Track room goal
+                        genre: data.user.genre,
+                        goal: parseInt(data.user.goal) || 500,
+                        isPrivate: !!data.user.isPrivate,  // <-- stored here
                         duration: 15,
                         shareLog: true,
                         status: 'waiting',
@@ -177,14 +177,12 @@ serve({
                 });
 
                 broadcastRoomState(roomId);
-                updateAllLobbyUsers(); // Refresh lobby counts for everyone else
+                updateAllLobbyUsers();
             }
 
             const room = rooms.get(ws.data.roomId);
             if (!room) return;
 
-            // --- IN-ROOM ACTIONS (Chat, Settings, Sprints, Progress) ---
-            // (These remain mostly the same)
             if (data.type === 'CHAT') {
                 const user = room.users.get(ws);
                 room.chat.push({ name: user.name, text: data.text });
@@ -194,7 +192,12 @@ serve({
             if (data.type === 'UPDATE_SETTINGS' && room.hostId === ws.data.id) {
                 room.duration = data.duration;
                 room.shareLog = data.shareLog;
+                // Allow toggling privacy from settings too
+                if (typeof data.isPrivate === 'boolean') {
+                    room.isPrivate = data.isPrivate;
+                }
                 broadcastRoomState(ws.data.roomId);
+                updateAllLobbyUsers(); // Refresh lobby in case privacy changed
             }
 
             if (data.type === 'UPDATE_SHARE_PREF') {
@@ -263,7 +266,6 @@ serve({
                 }
             }
 
-            // Allow manual leaving without closing connection
             if (data.type === 'LEAVE_ROOM') {
                 leaveRoom(ws);
             }
@@ -274,7 +276,6 @@ serve({
     }
 });
 
-// Centralized Leave Logic
 function leaveRoom(ws) {
     if (lobbyUsers.has(ws)) lobbyUsers.delete(ws);
 
@@ -284,23 +285,20 @@ function leaveRoom(ws) {
 
     room.users.delete(ws);
 
-    // If the HOST leaves, the room is destroyed. Kick everyone else.
     if (room.hostId === ws.data.id || room.users.size === 0) {
         if (room.timeoutId) clearTimeout(room.timeoutId);
         rooms.delete(ws.data.roomId);
 
-        // Tell remaining users the room closed
         for (const remainingWs of room.users.keys()) {
             remainingWs.data.roomId = null;
             remainingWs.send(JSON.stringify({ type: 'ROOM_CLOSED' }));
         }
     } else {
-        // Just a normal user left, update room for everyone else
         broadcastRoomState(ws.data.roomId);
     }
 
     ws.data.roomId = null;
-    updateAllLobbyUsers(); // Refresh lobby since room count/existence changed
+    updateAllLobbyUsers();
 }
 
 console.log(`WebSocket server running`);

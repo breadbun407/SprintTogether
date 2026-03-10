@@ -446,6 +446,18 @@ textarea:focus {
   border-color: var(--primary);
 }
 
+.privacy-tag {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border-color: #d8b4fe;
+}
+
+[data-theme="dark"] .privacy-tag {
+  background: #2e1a47;
+  color: #d8b4fe;
+  border-color: #6b21a8;
+}
+
 .btn-join {
   background: var(--primary);
   color: #fff;

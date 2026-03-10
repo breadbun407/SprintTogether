@@ -20,6 +20,7 @@ function App() {
   const [genre, setGenre] = useState('Any Genre');
   const [displayMode, setDisplayMode] = useState('numbers');
   const [shareMyLog, setShareMyLog] = useState(true);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   // Matchmaking Lobby
   const [lobbyRooms, setLobbyRooms] = useState([]);
@@ -36,6 +37,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [draftDuration, setDraftDuration] = useState(15);
   const [draftShareLog, setDraftShareLog] = useState(true);
+  const [draftIsPrivate, setDraftIsPrivate] = useState(false);
 
   // Chat scroll ref
   const chatEndRef = useRef(null);
@@ -116,6 +118,7 @@ function App() {
       setRoomState(data);
       setDraftDuration(data.duration);
       setDraftShareLog(data.shareLog);
+      setDraftIsPrivate(data.isPrivate ?? false);
       setAppView('room');
       window.location.hash = data.roomId;
     }
@@ -170,7 +173,7 @@ function App() {
   const createRoom = () => {
     ws.send(JSON.stringify({
       type: 'CREATE_ROOM',
-      user: { name, goal, genre, displayMode, shareMyLog }
+      user: { name, goal, genre, displayMode, shareMyLog, isPrivate }
     }));
   };
 
@@ -191,7 +194,7 @@ function App() {
   };
 
   const saveSettings = () => {
-    ws.send(JSON.stringify({ type: 'UPDATE_SETTINGS', duration: draftDuration, shareLog: draftShareLog }));
+    ws.send(JSON.stringify({ type: 'UPDATE_SETTINGS', duration: draftDuration, shareLog: draftShareLog, isPrivate: draftIsPrivate }));
     setShowSettings(false);
   };
 
@@ -234,10 +237,11 @@ function App() {
     return (
       <div className="view setup-view">
         <div className="setup-card">
-          <h1 className="logo">Sprint Link</h1>
+          <h1 className="logo">SprintR</h1>
           <p className="tagline">Matching you with other writers for productivity and collaboration</p>
           <p >Create a room and send an invite to your writing partners.</p>
-          <p >Or search for an existing room to join others, in your genre, or with similar word goals.</p>
+          <p >Or search for an existing room to join others, in your genre, or with similar word</p>
+
           <div className="form-group">
             <label>Your Name</label>
             <input
@@ -245,7 +249,7 @@ function App() {
               value={name}
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
-              placeholder="Display Name"
+              placeholder="e.g. WordSlinger99"
               maxLength={30}
             />
           </div>
@@ -308,6 +312,24 @@ function App() {
             </div>
           </div>
 
+          <div className="form-group">
+            <label>Room Visibility (if creating)</label>
+            <div className="toggle-group">
+              <button
+                className={!isPrivate ? 'active' : ''}
+                onClick={() => setIsPrivate(false)}
+              >
+                🌐 Public
+              </button>
+              <button
+                className={isPrivate ? 'active' : ''}
+                onClick={() => setIsPrivate(true)}
+              >
+                🔒 Private
+              </button>
+            </div>
+          </div>
+
           {roomIdFromUrl && (
             <p className="direct-link-notice">
               🔗 You have a room invite link. You'll join directly.
@@ -330,7 +352,7 @@ function App() {
     return (
       <div className="view lobby-view">
         <header className="lobby-header">
-          <h1 className="logo">Sprint Linking</h1>
+          <h1 className="logo">SprintR</h1>
           <div className="lobby-meta">
             <span className="lobby-user-chip">
               ✍️ {name} · {goal} words · {genre}
@@ -402,7 +424,7 @@ function App() {
         {/* ── Sidebar ── */}
         <aside className="sidebar">
           <div className="sidebar-top">
-            <h1 className="logo small">Sprint Linking</h1>
+            <h1 className="logo small">SprintR</h1>
             <button className="btn-theme-toggle icon-only" onClick={() => setIsDarkMode(d => !d)}>
               {isDarkMode ? '☀️' : '🌙'}
             </button>
@@ -412,11 +434,10 @@ function App() {
           <div className="room-info-block">
             <p className="room-id-label">Room</p>
             <p className="room-id-value">{roomState.roomId}</p>
+            {roomState.isPrivate && <span className="room-tag privacy-tag">🔒 Private</span>}
             <button
               className="btn-ghost small"
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-              }}
+              onClick={() => navigator.clipboard.writeText(window.location.href)}
             >
               📋 Copy Invite Link
             </button>
@@ -471,6 +492,14 @@ function App() {
                           type="checkbox"
                           checked={draftShareLog}
                           onChange={e => setDraftShareLog(e.target.checked)}
+                        />
+                      </label>
+                      <label className="inline-toggle">
+                        <span>🔒 Private room</span>
+                        <input
+                          type="checkbox"
+                          checked={draftIsPrivate}
+                          onChange={e => setDraftIsPrivate(e.target.checked)}
                         />
                       </label>
                       <button className="btn-primary small" onClick={saveSettings}>Save</button>
