@@ -225,9 +225,9 @@ function App() {
   };
 
   const statusLabel = (status) => {
-    if (status === 'active') return '✍️ Sprinting';
-    if (status === 'finished') return '✅ Finished';
-    if (status === 'break') return '☕ On Break';
+    if (status === 'active') return 'Sprinting';
+    if (status === 'finished') return 'Finished';
+    if (status === 'break') return 'On Break';
     return '⏳ Waiting';
   };
 
@@ -319,13 +319,13 @@ function App() {
                 className={!isPrivate ? 'active' : ''}
                 onClick={() => setIsPrivate(false)}
               >
-                🌐 Public
+                Public
               </button>
               <button
                 className={isPrivate ? 'active' : ''}
                 onClick={() => setIsPrivate(true)}
               >
-                🔒 Private
+                Private
               </button>
             </div>
           </div>
@@ -341,7 +341,7 @@ function App() {
           </button>
 
           <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
-            {isDarkMode ? '☀️ Light' : '🌙 Dark'}
+            {isDarkMode ? 'Light' : 'Dark'}
           </button>
         </div>
       </div>
@@ -359,7 +359,7 @@ function App() {
             </span>
             <button className="btn-ghost" onClick={() => setAppView('setup')}>← Edit Profile</button>
             <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
-              {isDarkMode ? '☀️' : '🌙'}
+              {isDarkMode ? 'Light' : 'Dark'}
             </button>
           </div>
         </header>
@@ -426,7 +426,7 @@ function App() {
           <div className="sidebar-top">
             <h1 className="logo small">SprintR</h1>
             <button className="btn-theme-toggle icon-only" onClick={() => setIsDarkMode(d => !d)}>
-              {isDarkMode ? '☀️' : '🌙'}
+              {isDarkMode ? 'Light' : 'Dark'}
             </button>
           </div>
 
@@ -439,7 +439,7 @@ function App() {
               className="btn-ghost small"
               onClick={() => navigator.clipboard.writeText(window.location.href)}
             >
-              📋 Copy Invite Link
+              Copy Invite Link
             </button>
           </div>
 
@@ -520,14 +520,14 @@ function App() {
                     />
                   </label>
                   <button className="btn-secondary full" onClick={startBreak}>
-                    ☕ Start Break
+                    Start Break
                   </button>
                 </div>
               )}
 
               {(status === 'finished' || status === 'break') && (
                 <button className="btn-primary full" onClick={setupNewSprint}>
-                  🔄 New Sprint
+                  New Sprint
                 </button>
               )}
             </div>
