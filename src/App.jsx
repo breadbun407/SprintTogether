@@ -238,9 +238,9 @@ function App() {
       <div className="view setup-view">
         <div className="setup-card">
           <h1 className="logo">SprintR</h1>
-          <p className="tagline">Matching you with other writers for productivity and collaboration</p>
-          <p >Create a room and send an invite to your writing partners.</p>
-          <p >Or search for an existing room to join others, in your genre, or with similar word</p>
+          <p className="tagline" style={{ textAlign: 'justify' }}>Matching you with other writers for productivity and collaboration</p>
+          <p className="tagline" style={{ textAlign: 'justify' }}>Create a room and send an invite to your writing partners.</p>
+          <p className="tagline" style={{ textAlign: 'justify' }}>Or search for an existing room to join others, in your genre, or with similar word</p>
 
           <div className="form-group">
             <label>Your Name</label>
