@@ -1,4 +1,3 @@
-// server.js
 import { serve } from "bun";
 
 const adjs = [
@@ -31,7 +30,8 @@ const verbs = [
     "Rises", "Roams", "Runs", "Sails", "Searches", "Shines", "Sleeps", "Soars", "Speaks", "Spins", "Spreads", "Stands", "Strikes",
     "Surges", "Swims", "Thinks", "Travels", "Turns", "Unfolds", "Waits", "Wanders", "Watches", "Whispers", "Wins"
 ];
-const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}${verbs[Math.floor(Math.random() * verbs.length)]}`;
+
+const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}-${nouns[Math.floor(Math.random() * nouns.length)]}-${verbs[Math.floor(Math.random() * verbs.length)]}`;
 
 const rooms = new Map();
 
@@ -59,8 +59,8 @@ function broadcastRoomState(roomId) {
             roomId,
             isHost: room.hostId === userData.id,
             duration: room.duration,
-            shareLog: room.shareLog,
-            status: room.status,
+            shareLog: room.shareLog, // The Host's master toggle
+            status: room.status, 
             users: usersList,
             chat: room.chat
         }));
@@ -90,9 +90,9 @@ serve({
                         duration: 15,
                         shareLog: true,
                         status: 'waiting',
-                        sprintCount: 0, // Track sprint number
+                        sprintCount: 0,
                         users: new Map(),
-                        chat: [],
+                        chat:[],
                         timeoutId: null
                     });
                 }
@@ -106,6 +106,7 @@ serve({
                     name: data.user.name,
                     goal: parseInt(data.user.goal) || 500,
                     displayMode: data.user.displayMode,
+                    shareMyLog: data.user.shareMyLog, // Track individual choice
                     currentWords: 0,
                     text: ""
                 });
@@ -128,10 +129,18 @@ serve({
                 broadcastRoomState(ws.data.roomId);
             }
 
+            // NEW: Let an individual user update their privacy setting mid-sprint
+            if (data.type === 'UPDATE_SHARE_PREF') {
+                const user = room.users.get(ws);
+                if (user) {
+                    user.shareMyLog = data.shareMyLog;
+                }
+            }
+
             if (data.type === 'START_SPRINT' && room.hostId === ws.data.id) {
                 if (room.timeoutId) clearTimeout(room.timeoutId);
                 room.status = 'active';
-                room.sprintCount += 1; // Increment sprint counter
+                room.sprintCount += 1;
                 const endTime = Date.now() + (room.duration * 60 * 1000);
 
                 for (const w of room.users.keys()) {
@@ -140,9 +149,12 @@ serve({
 
                 room.timeoutId = setTimeout(() => {
                     room.status = 'finished';
-                    let logs = [];
+                    let logs =[];
+                    // Only run logic if Host enabled the room-wide sharing
                     if (room.shareLog) {
-                        logs = Array.from(room.users.values()).map(u => ({ name: u.name, text: u.text }));
+                        logs = Array.from(room.users.values())
+                            .filter(u => u.shareMyLog) // Only grab text from users who opted-in!
+                            .map(u => ({ name: u.name, text: u.text }));
                     }
                     for (const w of room.users.keys()) {
                         w.send(JSON.stringify({ type: 'SPRINT_ENDED', logs, sprintNumber: room.sprintCount }));
@@ -153,7 +165,6 @@ serve({
                 broadcastRoomState(ws.data.roomId);
             }
 
-            // NEW: Break Timer Logic
             if (data.type === 'START_BREAK' && room.hostId === ws.data.id) {
                 room.status = 'break';
                 const endTime = Date.now() + (data.duration * 60 * 1000);
@@ -163,18 +174,15 @@ serve({
                 broadcastRoomState(ws.data.roomId);
             }
 
-            // NEW: Reset room for a fresh sprint
             if (data.type === 'SETUP_NEW_SPRINT' && room.hostId === ws.data.id) {
                 if (room.timeoutId) clearTimeout(room.timeoutId);
                 room.status = 'waiting';
-
-                // Clear everyone's word counts and text
+                
                 for (const user of room.users.values()) {
                     user.currentWords = 0;
                     user.text = "";
                 }
-
-                // Tell frontend clients to empty their text areas
+                
                 for (const w of room.users.keys()) {
                     w.send(JSON.stringify({ type: 'CLEAR_TEXT' }));
                 }

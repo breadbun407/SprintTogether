@@ -15,15 +15,15 @@ function App() {
   const [name, setName] = useState('');
   const [goal, setGoal] = useState(500);
   const [displayMode, setDisplayMode] = useState('numbers');
+  const [shareMyLog, setShareMyLog] = useState(true); // New: User's individual sharing choice
 
   const [roomState, setRoomState] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [myText, setMyText] = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
 
-  // Updated: Holds historical logs. Prepending new ones so they appear on top.
   const [sprintLogs, setSprintLogs] = useState([]);
-  const [breakDuration, setBreakDuration] = useState(5); // Host break config
+  const [breakDuration, setBreakDuration] = useState(5);
 
   useEffect(() => {
     const handleHash = () => setRoomId(window.location.hash.slice(1));
@@ -59,14 +59,14 @@ function App() {
     if (!name.trim()) return alert("Please enter a name");
 
     const rawWsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
-    const cleanWsUrl = rawWsUrl.split('#')[0]; // Prevents fragment crash
+    const cleanWsUrl = rawWsUrl.split('#')[0];
     ws = new WebSocket(cleanWsUrl);
 
     ws.onopen = () => {
       const payload = {
         type: isCreating ? 'CREATE_ROOM' : 'JOIN_ROOM',
         roomId: isCreating ? null : roomId,
-        user: { name, goal, displayMode }
+        user: { name, goal, displayMode, shareMyLog } // Send initial choice
       };
       ws.send(JSON.stringify(payload));
     };
@@ -87,7 +87,6 @@ function App() {
       }
       if (data.type === 'SPRINT_ENDED') {
         setTimeLeft(0);
-        // Prepend the new logs to the top of our history
         setSprintLogs(prev => [{ sprintNumber: data.sprintNumber, logs: data.logs }, ...prev]);
       }
       if (data.type === 'CLEAR_TEXT') {
@@ -113,6 +112,15 @@ function App() {
 
   const updateSettings = (duration, shareLog) => {
     ws.send(JSON.stringify({ type: 'UPDATE_SETTINGS', duration, shareLog }));
+  };
+
+  // Toggle my personal share preference and update server
+  const toggleShareMyLog = (e) => {
+    const isChecked = e.target.checked;
+    setShareMyLog(isChecked);
+    if (ws) {
+      ws.send(JSON.stringify({ type: 'UPDATE_SHARE_PREF', shareMyLog: isChecked }));
+    }
   };
 
   const startSprint = () => ws.send(JSON.stringify({ type: 'START_SPRINT' }));
@@ -193,7 +201,12 @@ function App() {
                   roomState.status === 'break' ? 'Break Time' :
                     roomState.status === 'finished' ? 'Finished' : 'Waiting'}
               </div>
-              <div className="timer">{formatTime(timeLeft)}</div>
+              <div className="timer">
+                {/* Dynamically show Host's chosen time when waiting, otherwise normal countdown */}
+                {roomState.status === 'waiting'
+                  ? `${String(roomState.duration).padStart(2, '0')}:00`
+                  : formatTime(timeLeft)}
+              </div>
             </div>
 
             <button onClick={toggleTheme} className="theme-toggle">
@@ -202,7 +215,6 @@ function App() {
           </div>
         </div>
 
-        {/* Phase 1: Setup Sprint Controls */}
         {roomState.isHost && roomState.status === 'waiting' && (
           <div className="host-controls">
             <label>
@@ -211,13 +223,12 @@ function App() {
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input type="checkbox" checked={roomState.shareLog} onChange={e => updateSettings(roomState.duration, e.target.checked)} />
-              Share writing at the end
+              Enable End-of-Sprint Log Sharing
             </label>
             <button onClick={startSprint} className="start-btn" style={{ marginLeft: 'auto' }}>Start Sprint</button>
           </div>
         )}
 
-        {/* Phase 2: Post-Sprint Controls (Break Timer / Setup Next) */}
         {(roomState.status === 'finished' || roomState.status === 'break') && roomState.isHost && (
           <div className="host-controls" style={{ borderColor: 'var(--primary)' }}>
             {roomState.status === 'finished' && (
@@ -237,6 +248,19 @@ function App() {
           </div>
         )}
 
+        {/* The Client's Personal Opt-in/Opt-out Checkbox */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', opacity: roomState.shareLog ? 1 : 0.5 }}>
+          <label style={{ fontSize: '0.9rem', color: 'var(--text-light)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={shareMyLog}
+              onChange={toggleShareMyLog}
+              disabled={!roomState.shareLog}
+            />
+            Submit my text to the log {!roomState.shareLog && "(Disabled by host)"}
+          </label>
+        </div>
+
         <textarea
           className="writer-canvas"
           placeholder={roomState.status === 'waiting' ? "Waiting for sprint to start..." : "Start writing..."}
@@ -245,7 +269,6 @@ function App() {
           onChange={handleTextChange}
         />
 
-        {/* Logs Area (shows if any historical logs exist) */}
         {sprintLogs.length > 0 && (
           <div className="logs-area">
             <h3>Sprint History</h3>
@@ -255,7 +278,7 @@ function App() {
                   Sprint {sprint.sprintNumber}
                 </h4>
                 {sprint.logs.length === 0 ? (
-                  <p style={{ color: 'var(--text-light)' }}><em>Sharing writing was disabled by the host for this sprint.</em></p>
+                  <p style={{ color: 'var(--text-light)' }}><em>No writing was shared for this sprint.</em></p>
                 ) : (
                   sprint.logs.map((log, j) => (
                     <div key={j} className="log-entry">
