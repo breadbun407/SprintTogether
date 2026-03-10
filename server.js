@@ -1,22 +1,47 @@
 // server.js
 import { serve } from "bun";
 
-// Helper to generate human-readable URLs (e.g., pizza-waves-tree)
-const adjs = ["pizza", "happy", "quiet", "fast", "clever", "blue", "brave"];
-const nouns = ["waves", "tree", "cat", "moon", "river", "bird", "mountain"];
-const verbs = ["jumps", "sleeps", "runs", "flies", "thinks", "glows", "spins"];
-const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}-${nouns[Math.floor(Math.random() * nouns.length)]}-${verbs[Math.floor(Math.random() * verbs.length)]}`;
+const adjs = [
+    "Ancient", "Angry", "Arcane", "Azure", "Bold", "Brave", "Bright", "Broken", "Burning", "Calm", "Clever", "Cold", "Crimson", "Crystal",
+    "Curious", "Dark", "Daring", "Dazzling", "Deep", "Divine", "Dreadful", "Eager", "Electric", "Emerald", "Endless", "Enigmatic",
+    "Fading", "Fierce", "Flaming", "Flying", "Frozen", "Gentle", "Ghostly", "Golden", "Grand", "Grim", "Hidden", "Hollow", "Holy",
+    "Icy", "Iron", "Ivory", "Jagged", "Jolly", "Kind", "Lively", "Lonely", "Lost", "Luminous", "Lucky", "Massive", "Midnight", "Mighty",
+    "Misty", "Mystic", "Nimble", "Noble", "Noisy", "Obsidian", "Old", "Pale", "Peaceful", "Phantom", "Playful", "Proud", "Quiet",
+    "Radiant", "Rapid", "Restless", "Rising", "Royal", "Rugged", "Sacred", "Scarlet", "Secret", "Shady", "Sharp", "Shimmering",
+    "Silent", "Silver", "Sleeping", "Slow", "Small", "Solar", "Spicy", "Spiral", "Stormy", "Stubborn", "Swift", "Tender", "Thunderous",
+    "Tiny", "Twilight", "Valiant", "Velvet", "Vibrant", "Vicious", "Wandering", "Warm", "Wild", "Wise", "Young"
+];
 
-// Store active rooms
+const nouns = [
+    "Anchor", "Angel", "Apple", "Arrow", "Ash", "Bear", "Beacon", "Blade", "Bloom", "Boulder", "Branch", "Breeze", "Brook", "Castle",
+    "Cavern", "Cedar", "Champion", "Cliff", "Cloud", "Comet", "Crown", "Crystal", "Dagger", "Dawn", "Desert", "Dragon", "Dream",
+    "Drift", "Eagle", "Echo", "Ember", "Falcon", "Feather", "Field", "Fire", "Flame", "Flower", "Forest", "Fortress", "Fountain",
+    "Fox", "Galaxy", "Garden", "Ghost", "Glade", "Grove", "Harbor", "Hawk", "Heart", "Hill", "Horizon", "Island", "Jungle", "Knight",
+    "Lake", "Leaf", "Lion", "Lotus", "Marble", "Meadow", "Meteor", "Mist", "Moon", "Mountain", "Ocean", "Oak", "Orb", "Owl", "Palace",
+    "Path", "Peak", "Phoenix", "Pillar", "Pine", "Planet", "Pond", "Portal", "Prairie", "Prince", "Queen", "Rain", "River", "Rock",
+    "Rose", "Saber", "Sage", "Sand", "Shadow", "Shield", "Shore", "Sky", "Snow", "Spark", "Spirit", "Spring", "Star", "Stone", "Storm",
+    "Sun", "Temple", "Throne", "Tiger", "Tower", "Tree", "Valley", "Voyager", "Water", "Wave", "Whale", "Wind", "Wolf", "World"
+];
+
+const verbs = [
+    "Adapts", "Ascends", "Awakens", "Battles", "Becomes", "Blazes", "Blooms", "Builds", "Burns", "Calls", "Charges", "Climbs",
+    "Conquers", "Creates", "Dances", "Defends", "Discovers", "Drifts", "Echoes", "Emerges", "Endures", "Explores", "Falls", "Fights",
+    "Flows", "Flourishes", "Flies", "Forms", "Gathers", "Glides", "Glows", "Grows", "Guards", "Guides", "Hunts", "Ignites", "Journeys",
+    "Leads", "Leaps", "Lingers", "Listens", "Marches", "Moves", "Observes", "Overcomes", "Protects", "Pursues", "Races", "Rests",
+    "Rises", "Roams", "Runs", "Sails", "Searches", "Shines", "Sleeps", "Soars", "Speaks", "Spins", "Spreads", "Stands", "Strikes",
+    "Surges", "Swims", "Thinks", "Travels", "Turns", "Unfolds", "Waits", "Wanders", "Watches", "Whispers", "Wins"
+];
+const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}${verbs[Math.floor(Math.random() * verbs.length)]}`;
+
 const rooms = new Map();
 
+// eslint-disable-next-line no-undef
 const port = Bun.env.PORT || 3001;
 
 function broadcastRoomState(roomId) {
     const room = rooms.get(roomId);
     if (!room) return;
 
-    // Anonymize user data before broadcasting
     const usersList = Array.from(room.users.values()).map(u => {
         let displayProgress = "0";
         if (u.displayMode === 'percentage') {
@@ -35,7 +60,7 @@ function broadcastRoomState(roomId) {
             isHost: room.hostId === userData.id,
             duration: room.duration,
             shareLog: room.shareLog,
-            status: room.status, // 'waiting', 'active', 'finished'
+            status: room.status,
             users: usersList,
             chat: room.chat
         }));
@@ -44,7 +69,7 @@ function broadcastRoomState(roomId) {
 
 serve({
     port: port,
-    hostname: "0.0.0.0", // Cloud hosting hostname
+    hostname: "0.0.0.0",
     fetch(req, server) {
         if (server.upgrade(req)) return;
         return new Response("Expected WebSocket", { status: 400 });
@@ -65,6 +90,7 @@ serve({
                         duration: 15,
                         shareLog: true,
                         status: 'waiting',
+                        sprintCount: 0, // Track sprint number
                         users: new Map(),
                         chat: [],
                         timeoutId: null
@@ -103,7 +129,9 @@ serve({
             }
 
             if (data.type === 'START_SPRINT' && room.hostId === ws.data.id) {
+                if (room.timeoutId) clearTimeout(room.timeoutId);
                 room.status = 'active';
+                room.sprintCount += 1; // Increment sprint counter
                 const endTime = Date.now() + (room.duration * 60 * 1000);
 
                 for (const w of room.users.keys()) {
@@ -117,11 +145,39 @@ serve({
                         logs = Array.from(room.users.values()).map(u => ({ name: u.name, text: u.text }));
                     }
                     for (const w of room.users.keys()) {
-                        w.send(JSON.stringify({ type: 'SPRINT_ENDED', logs }));
+                        w.send(JSON.stringify({ type: 'SPRINT_ENDED', logs, sprintNumber: room.sprintCount }));
                     }
                     broadcastRoomState(ws.data.roomId);
                 }, room.duration * 60 * 1000);
 
+                broadcastRoomState(ws.data.roomId);
+            }
+
+            // NEW: Break Timer Logic
+            if (data.type === 'START_BREAK' && room.hostId === ws.data.id) {
+                room.status = 'break';
+                const endTime = Date.now() + (data.duration * 60 * 1000);
+                for (const w of room.users.keys()) {
+                    w.send(JSON.stringify({ type: 'BREAK_STARTED', endTime }));
+                }
+                broadcastRoomState(ws.data.roomId);
+            }
+
+            // NEW: Reset room for a fresh sprint
+            if (data.type === 'SETUP_NEW_SPRINT' && room.hostId === ws.data.id) {
+                if (room.timeoutId) clearTimeout(room.timeoutId);
+                room.status = 'waiting';
+
+                // Clear everyone's word counts and text
+                for (const user of room.users.values()) {
+                    user.currentWords = 0;
+                    user.text = "";
+                }
+
+                // Tell frontend clients to empty their text areas
+                for (const w of room.users.keys()) {
+                    w.send(JSON.stringify({ type: 'CLEAR_TEXT' }));
+                }
                 broadcastRoomState(ws.data.roomId);
             }
 
@@ -139,7 +195,6 @@ serve({
             const room = rooms.get(ws.data.roomId);
             if (room) {
                 room.users.delete(ws);
-                // If empty, delete room. Else, reassign host if host left.
                 if (room.users.size === 0) {
                     if (room.timeoutId) clearTimeout(room.timeoutId);
                     rooms.delete(ws.data.roomId);

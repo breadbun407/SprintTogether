@@ -1,4 +1,3 @@
-// src/App.jsx
 import { useEffect, useState } from 'react';
 import './App.css';
 
@@ -8,32 +7,30 @@ function App() {
   const [roomId, setRoomId] = useState(window.location.hash.slice(1));
   const [inRoom, setInRoom] = useState(false);
 
-  // Theme state (checks local storage or system preference first)
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark' ||
       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
-  // User setup
   const [name, setName] = useState('');
   const [goal, setGoal] = useState(500);
   const [displayMode, setDisplayMode] = useState('numbers');
 
-  // Room state
   const [roomState, setRoomState] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [myText, setMyText] = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
-  const [sprintLogs, setSprintLogs] = useState([]);
 
-  // Handle URL hashes
+  // Updated: Holds historical logs. Prepending new ones so they appear on top.
+  const [sprintLogs, setSprintLogs] = useState([]);
+  const [breakDuration, setBreakDuration] = useState(5); // Host break config
+
   useEffect(() => {
     const handleHash = () => setRoomId(window.location.hash.slice(1));
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  // Handle Dark Mode toggle effect
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.setAttribute('data-theme', 'dark');
@@ -44,7 +41,6 @@ function App() {
     }
   }, [isDarkMode]);
 
-  // Timer countdown hook
   useEffect(() => {
     if (!timeLeft) return;
     const interval = setInterval(() => {
@@ -62,9 +58,9 @@ function App() {
   const connectAndJoin = (isCreating) => {
     if (!name.trim()) return alert("Please enter a name");
 
-    // Connects to hosted environment variable or local server
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
-    ws = new WebSocket(wsUrl);
+    const rawWsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
+    const cleanWsUrl = rawWsUrl.split('#')[0]; // Prevents fragment crash
+    ws = new WebSocket(cleanWsUrl);
 
     ws.onopen = () => {
       const payload = {
@@ -86,12 +82,17 @@ function App() {
         setInRoom(true);
         window.location.hash = data.roomId;
       }
-      if (data.type === 'SPRINT_STARTED') {
-        setTimeLeft(data.endTime - Date.now());
+      if (data.type === 'SPRINT_STARTED' || data.type === 'BREAK_STARTED') {
+        setTimeLeft(Math.max(0, data.endTime - Date.now()));
       }
       if (data.type === 'SPRINT_ENDED') {
         setTimeLeft(0);
-        setSprintLogs(data.logs);
+        // Prepend the new logs to the top of our history
+        setSprintLogs(prev => [{ sprintNumber: data.sprintNumber, logs: data.logs }, ...prev]);
+      }
+      if (data.type === 'CLEAR_TEXT') {
+        setMyText('');
+        setTimeLeft(null);
       }
     };
   };
@@ -115,7 +116,8 @@ function App() {
   };
 
   const startSprint = () => ws.send(JSON.stringify({ type: 'START_SPRINT' }));
-
+  const startBreak = () => ws.send(JSON.stringify({ type: 'START_BREAK', duration: breakDuration }));
+  const setupNewSprint = () => ws.send(JSON.stringify({ type: 'SETUP_NEW_SPRINT' }));
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   if (!inRoom) {
@@ -184,30 +186,54 @@ function App() {
         <div className="top-bar">
           <h2>Room: <code>{roomState.roomId}</code></h2>
           <div className="header-actions">
-            <div className="timer">{formatTime(timeLeft)}</div>
+
+            <div className="timer-container" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-light)', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                {roomState.status === 'active' ? 'Sprint Time' :
+                  roomState.status === 'break' ? 'Break Time' :
+                    roomState.status === 'finished' ? 'Finished' : 'Waiting'}
+              </div>
+              <div className="timer">{formatTime(timeLeft)}</div>
+            </div>
+
             <button onClick={toggleTheme} className="theme-toggle">
               {isDarkMode ? '☀️' : '🌙'}
             </button>
           </div>
         </div>
 
+        {/* Phase 1: Setup Sprint Controls */}
         {roomState.isHost && roomState.status === 'waiting' && (
           <div className="host-controls">
             <label>
-              Duration (mins):
-              <input
-                type="number"
-                style={{ marginLeft: '10px', width: '60px', padding: '5px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
-                value={roomState.duration}
-                onChange={e => updateSettings(Number(e.target.value), roomState.shareLog)}
-                min="1"
-              />
+              Sprint (mins):
+              <input type="number" style={{ marginLeft: '10px', width: '60px', padding: '5px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }} value={roomState.duration} onChange={e => updateSettings(Number(e.target.value), roomState.shareLog)} min="1" />
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input type="checkbox" checked={roomState.shareLog} onChange={e => updateSettings(roomState.duration, e.target.checked)} />
               Share writing at the end
             </label>
             <button onClick={startSprint} className="start-btn" style={{ marginLeft: 'auto' }}>Start Sprint</button>
+          </div>
+        )}
+
+        {/* Phase 2: Post-Sprint Controls (Break Timer / Setup Next) */}
+        {(roomState.status === 'finished' || roomState.status === 'break') && roomState.isHost && (
+          <div className="host-controls" style={{ borderColor: 'var(--primary)' }}>
+            {roomState.status === 'finished' && (
+              <>
+                <label>
+                  Break (mins):
+                  <input type="number" style={{ marginLeft: '10px', width: '60px', padding: '5px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }} value={breakDuration} onChange={e => setBreakDuration(Number(e.target.value))} min="1" />
+                </label>
+                <button onClick={startBreak} className="start-btn" style={{ background: '#3b82f6' }}>
+                  Start Break
+                </button>
+              </>
+            )}
+            <button onClick={setupNewSprint} className="start-btn" style={{ marginLeft: 'auto', background: '#8b5cf6' }}>
+              Setup Next Sprint
+            </button>
           </div>
         )}
 
@@ -219,14 +245,25 @@ function App() {
           onChange={handleTextChange}
         />
 
-        {roomState.status === 'finished' && (
+        {/* Logs Area (shows if any historical logs exist) */}
+        {sprintLogs.length > 0 && (
           <div className="logs-area">
-            <h3>Sprint Logs</h3>
-            {!roomState.shareLog && <p><em>Sharing writing was disabled by the host.</em></p>}
-            {roomState.shareLog && sprintLogs.map((log, i) => (
-              <div key={i} className="log-entry">
-                <h4>{log.name}'s Writing</h4>
-                <p>{log.text || <em>(No text written)</em>}</p>
+            <h3>Sprint History</h3>
+            {sprintLogs.map((sprint, i) => (
+              <div key={i} className="sprint-group">
+                <h4 style={{ color: 'var(--primary)', marginBottom: '10px' }}>
+                  Sprint {sprint.sprintNumber}
+                </h4>
+                {sprint.logs.length === 0 ? (
+                  <p style={{ color: 'var(--text-light)' }}><em>Sharing writing was disabled by the host for this sprint.</em></p>
+                ) : (
+                  sprint.logs.map((log, j) => (
+                    <div key={j} className="log-entry">
+                      <strong>{log.name}</strong>
+                      <p>{log.text || <em>(No text written)</em>}</p>
+                    </div>
+                  ))
+                )}
               </div>
             ))}
           </div>
