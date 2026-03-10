@@ -234,9 +234,10 @@ function App() {
     return (
       <div className="view setup-view">
         <div className="setup-card">
-          <h1 className="logo">SprintR</h1>
-          <p className="tagline">Writing sprints with strangers who get it.</p>
-
+          <h1 className="logo">Sprint Link</h1>
+          <p className="tagline">Matching you with other writers for productivity and collaboration</p>
+          <p >Create a room and send an invite to your writing partners.</p>
+          <p >Or search for an existing room to join others, in your genre, or with similar word goals.</p>
           <div className="form-group">
             <label>Your Name</label>
             <input
@@ -244,7 +245,7 @@ function App() {
               value={name}
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
-              placeholder="e.g. WordSlinger99"
+              placeholder="Display Name"
               maxLength={30}
             />
           </div>
@@ -329,7 +330,7 @@ function App() {
     return (
       <div className="view lobby-view">
         <header className="lobby-header">
-          <h1 className="logo">SprintR</h1>
+          <h1 className="logo">Sprint Linking</h1>
           <div className="lobby-meta">
             <span className="lobby-user-chip">
               ✍️ {name} · {goal} words · {genre}
@@ -401,7 +402,7 @@ function App() {
         {/* ── Sidebar ── */}
         <aside className="sidebar">
           <div className="sidebar-top">
-            <h1 className="logo small">SprintR</h1>
+            <h1 className="logo small">Sprint Linking</h1>
             <button className="btn-theme-toggle icon-only" onClick={() => setIsDarkMode(d => !d)}>
               {isDarkMode ? '☀️' : '🌙'}
             </button>

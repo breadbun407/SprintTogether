@@ -31,7 +31,7 @@ const verbs = [
     "Surges", "Swims", "Thinks", "Travels", "Turns", "Unfolds", "Waits", "Wanders", "Watches", "Whispers", "Wins"
 ];
 
-const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}-${nouns[Math.floor(Math.random() * nouns.length)]}-${verbs[Math.floor(Math.random() * verbs.length)]}`;
+const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}${verbs[Math.floor(Math.random() * verbs.length)]}`;
 
 const rooms = new Map();
 const lobbyUsers = new Map();
