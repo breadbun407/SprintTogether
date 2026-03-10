@@ -10,7 +10,7 @@ const genId = () => `${adjs[Math.floor(Math.random() * adjs.length)]}-${nouns[Ma
 // Store active rooms
 const rooms = new Map();
 
-const port = serve.env.PORT || 3001;
+const port = Bun.env.PORT || 3001;
 
 function broadcastRoomState(roomId) {
     const room = rooms.get(roomId);

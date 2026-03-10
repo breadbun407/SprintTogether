@@ -8,6 +8,12 @@ function App() {
   const [roomId, setRoomId] = useState(window.location.hash.slice(1));
   const [inRoom, setInRoom] = useState(false);
 
+  // Theme state (checks local storage or system preference first)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark' ||
+      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
+
   // User setup
   const [name, setName] = useState('');
   const [goal, setGoal] = useState(500);
@@ -20,11 +26,23 @@ function App() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [sprintLogs, setSprintLogs] = useState([]);
 
+  // Handle URL hashes
   useEffect(() => {
     const handleHash = () => setRoomId(window.location.hash.slice(1));
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
+
+  // Handle Dark Mode toggle effect
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
 
   // Timer countdown hook
   useEffect(() => {
@@ -44,8 +62,10 @@ function App() {
   const connectAndJoin = (isCreating) => {
     if (!name.trim()) return alert("Please enter a name");
 
+    // Connects to hosted environment variable or local server
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
     ws = new WebSocket(wsUrl);
+
     ws.onopen = () => {
       const payload = {
         type: isCreating ? 'CREATE_ROOM' : 'JOIN_ROOM',
@@ -96,9 +116,16 @@ function App() {
 
   const startSprint = () => ws.send(JSON.stringify({ type: 'START_SPRINT' }));
 
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
   if (!inRoom) {
     return (
       <div className="setup-container">
+        <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
+          <button onClick={toggleTheme} className="theme-toggle">
+            {isDarkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
         <h1>✍️ Sprint Writers</h1>
         <div className="setup-card">
           <h3>{roomId ? `Join Room: ${roomId}` : 'Create a New Room'}</h3>
@@ -130,8 +157,8 @@ function App() {
         <div className="panel users-panel">
           <h3>Users ({roomState.users.length})</h3>
           <ul>
-            {roomState.users.map(u => (
-              <li key={u.id}>
+            {roomState.users.map((u, i) => (
+              <li key={i}>
                 <strong>{u.name}</strong>
                 <span className="progress-badge">{u.displayProgress}</span>
               </li>
@@ -156,20 +183,31 @@ function App() {
       <div className="main-area">
         <div className="top-bar">
           <h2>Room: <code>{roomState.roomId}</code></h2>
-          <div className="timer">{formatTime(timeLeft)}</div>
+          <div className="header-actions">
+            <div className="timer">{formatTime(timeLeft)}</div>
+            <button onClick={toggleTheme} className="theme-toggle">
+              {isDarkMode ? '☀️' : '🌙'}
+            </button>
+          </div>
         </div>
 
         {roomState.isHost && roomState.status === 'waiting' && (
           <div className="host-controls">
             <label>
               Duration (mins):
-              <input type="number" value={roomState.duration} onChange={e => updateSettings(Number(e.target.value), roomState.shareLog)} min="1" />
+              <input
+                type="number"
+                style={{ marginLeft: '10px', width: '60px', padding: '5px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+                value={roomState.duration}
+                onChange={e => updateSettings(Number(e.target.value), roomState.shareLog)}
+                min="1"
+              />
             </label>
-            <label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input type="checkbox" checked={roomState.shareLog} onChange={e => updateSettings(roomState.duration, e.target.checked)} />
               Share writing at the end
             </label>
-            <button onClick={startSprint} className="start-btn">Start Sprint</button>
+            <button onClick={startSprint} className="start-btn" style={{ marginLeft: 'auto' }}>Start Sprint</button>
           </div>
         )}
 
