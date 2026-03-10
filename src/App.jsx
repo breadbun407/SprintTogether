@@ -249,7 +249,7 @@ function App() {
               value={name}
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
-              placeholder="e.g. WordSlinger99"
+              placeholder="Public Display Name"
               maxLength={30}
             />
           </div>
