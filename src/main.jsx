@@ -7,6 +7,7 @@ import posthog from 'posthog-js'
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
   api_host: 'https://us.i.posthog.com',
   defaults: '2026-01-30',
+  person_profiles: 'never'
 })
 
 createRoot(document.getElementById('root')).render(

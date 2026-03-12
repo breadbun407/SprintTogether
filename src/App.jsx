@@ -2,12 +2,6 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import './App.css';
 import posthog from 'posthog-js'
 
-posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
-  api_host: 'https://us.i.posthog.com',
-  defaults: '2026-01-30',
-  person_profiles: 'never', // no persistent user profiles = lower privacy obligations
-})
-
 let ws = null;
 
 const GENRES = ["Any Genre", "Fantasy", "Sci-Fi", "Romance", "Thriller", "Horror", "Mystery", "Non-Fiction", "General Fiction"];
@@ -20,15 +14,6 @@ function App() {
     return localStorage.getItem('theme') === 'dark' ||
       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
-
-  const myTextRef = useRef(myText);
-  const roomStateRef = useRef(roomState);
-
-  useEffect(() => { myTextRef.current = myText; }, [myText]);
-  useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
-
-  const goalRef = useRef(goal);
-  useEffect(() => { goalRef.current = goal; }, [goal]);
 
   // User Profile
   const [name, setName] = useState('');
@@ -58,6 +43,10 @@ function App() {
   // Chat scroll ref
   const chatEndRef = useRef(null);
   const appViewRef = useRef(appView);
+
+  const myTextRef = useRef(myText);
+  const roomStateRef = useRef(roomState);
+  const goalRef = useRef(goal);
 
   useEffect(() => {
     appViewRef.current = appView;
@@ -98,6 +87,11 @@ function App() {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [roomState?.chat]);
+
+  useEffect(() => { myTextRef.current = myText; }, [myText]);
+  useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
+
+  useEffect(() => { goalRef.current = goal; }, [goal]);
 
   // ─── WebSocket Handlers ────────────────────────────────────────────────────
 
@@ -275,7 +269,7 @@ function App() {
     return (
       <div className="view setup-view">
         <div className="setup-card">
-          <h1 className="logo" style={{ textAlign: 'center' }}>Sprint Linking</h1>
+          <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
           <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Matching you with other writers for productivity and collaboration</p>
           <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Create a room and send an invite to your writing partners.</p>
           <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Or search for an existing room to join others, in your genre, or with similar word count goals.</p>
@@ -402,7 +396,7 @@ function App() {
     return (
       <div className="view lobby-view">
         <header className="lobby-header">
-          <h1 className="logo" style={{ textAlign: 'center' }}>Sprint Linking</h1>
+          <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
           <div className="lobby-meta">
             <span className="lobby-user-chip">
               ✍️ {name} · {goal} words · {genre}
@@ -474,7 +468,7 @@ function App() {
         {/* ── Sidebar ── */}
         <aside className="sidebar">
           <div className="sidebar-top">
-            <h1 className="logo" style={{ textAlign: 'center' }}>Sprint Linking</h1>
+            <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
             <button className="btn-theme-toggle icon-only" onClick={() => setIsDarkMode(d => !d)}>
               {isDarkMode ? 'Light' : 'Dark'}
             </button>
