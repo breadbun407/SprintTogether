@@ -186,6 +186,13 @@ button.small {
   box-shadow: 0 10px 40px var(--shadow-soft);
   width: 100%;
   max-width: 440px;
+  position: relative;
+}
+
+.setup-card .btn-theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
 }
 
 .tagline {
