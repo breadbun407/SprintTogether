@@ -361,12 +361,14 @@ function App() {
             />
           </div>
 
-          <div className="form-group">
-            <label>Genre</label>
-            <select value={genre} onChange={e => setGenre(e.target.value)}>
-              {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
+          {!roomIdFromUrl && (
+            <div className="form-group">
+              <label>Genre</label>
+              <select value={genre} onChange={e => setGenre(e.target.value)}>
+                {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="form-row">
             <div className="form-group">
