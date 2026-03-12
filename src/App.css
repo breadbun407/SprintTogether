@@ -546,13 +546,86 @@ textarea:focus {
 
 .participant-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.35rem;
   padding: 0.5rem 0.65rem;
   background: var(--bg);
   border-radius: 8px;
   margin-bottom: 0.4rem;
   font-size: 0.88rem;
+}
+
+.participant-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.participant-counts {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.participant-sprint-words {
+  font-size: 0.75rem;
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.progress-bar-empty {
+  opacity: 0.4;
+}
+
+/* Manuscript inputs */
+.settings-section-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.manuscript-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.manuscript-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.manuscript-field label {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.manuscript-field input {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
 }
 
 .participant-name {
@@ -561,20 +634,6 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-}
-
-.host-crown {
-  font-size: 0.8rem;
-  line-height: 1;
-}
-
-.participant-progress {
-  font-size: 0.8rem;
-  color: #fff;
-  background: var(--primary);
-  border-radius: 99px;
-  padding: 0.1rem 0.55rem;
-  font-weight: 600;
 }
 
 .my-settings {
@@ -638,6 +697,12 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.post-sprint-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .break-controls label {

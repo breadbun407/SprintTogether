@@ -17,9 +17,7 @@ function App() {
 
   // User Profile
   const [name, setName] = useState('');
-  const [goal, setGoal] = useState(500);
   const [genre, setGenre] = useState('Any Genre');
-  const [displayMode, setDisplayMode] = useState('numbers');
   const [shareMyLog, setShareMyLog] = useState(true);
   const [isPrivate, setIsPrivate] = useState(false);
 
@@ -34,23 +32,39 @@ function App() {
   const [sprintLogs, setSprintLogs] = useState([]);
   const [breakDuration, setBreakDuration] = useState(5);
 
+  // Manuscript progress (set inside the room)
+  const [manuscriptWords, setManuscriptWords] = useState('');
+  const [manuscriptGoal, setManuscriptGoal] = useState('');
+  const [showWordCounts, setShowWordCounts] = useState(false);
+
   // Settings panel (host only)
   const [showSettings, setShowSettings] = useState(false);
   const [draftDuration, setDraftDuration] = useState(15);
   const [draftShareLog, setDraftShareLog] = useState(true);
   const [draftIsPrivate, setDraftIsPrivate] = useState(false);
 
-  // Chat scroll ref
+  // Refs — declared after all state so initial values are defined
   const chatEndRef = useRef(null);
   const appViewRef = useRef(appView);
-
   const myTextRef = useRef(myText);
   const roomStateRef = useRef(roomState);
-  const goalRef = useRef(goal);
+  const sprintStartWordsRef = useRef(0); // snapshot of manuscriptWords when sprint begins
+  const manuscriptWordsRef = useRef(manuscriptWords);
+
+  useEffect(() => { appViewRef.current = appView; }, [appView]);
+  useEffect(() => { myTextRef.current = myText; }, [myText]);
+  useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
+  useEffect(() => { manuscriptWordsRef.current = manuscriptWords; }, [manuscriptWords]);
 
   useEffect(() => {
-    appViewRef.current = appView;
-  }, [appView]);
+    if (import.meta.env.VITE_PUBLIC_POSTHOG_KEY) {
+      posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
+        api_host: 'https://us.i.posthog.com',
+        defaults: '2026-01-30',
+        person_profiles: 'never',
+      });
+    }
+  }, []);
 
   useEffect(() => {
     const handleHash = () => setRoomIdFromUrl(window.location.hash.slice(1));
@@ -88,11 +102,6 @@ function App() {
     }
   }, [roomState?.chat]);
 
-  useEffect(() => { myTextRef.current = myText; }, [myText]);
-  useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
-
-  useEffect(() => { goalRef.current = goal; }, [goal]);
-
   // ─── WebSocket Handlers ────────────────────────────────────────────────────
 
   const joinLobby = useCallback(() => {
@@ -100,17 +109,17 @@ function App() {
     window.location.hash = '';
     ws.send(JSON.stringify({
       type: 'JOIN_LOBBY',
-      user: { name, goal, genre, displayMode, shareMyLog }
+      user: { name, goal: 500, genre, displayMode: 'numbers', shareMyLog }
     }));
-  }, [name, goal, genre, displayMode, shareMyLog]);
+  }, [name, genre, shareMyLog]);
 
   const joinRoom = useCallback((targetRoomId) => {
     ws.send(JSON.stringify({
       type: 'JOIN_ROOM',
       roomId: targetRoomId,
-      user: { name, goal, genre, displayMode, shareMyLog }
+      user: { name, goal: 500, genre, displayMode: 'numbers', shareMyLog }
     }));
-  }, [name, goal, genre, displayMode, shareMyLog]);
+  }, [name, genre, shareMyLog]);
 
   const handleWebSocketMessages = useCallback((event) => {
     const data = JSON.parse(event.data);
@@ -139,6 +148,9 @@ function App() {
       joinLobby();
     }
     if (data.type === 'SPRINT_STARTED' || data.type === 'BREAK_STARTED') {
+      if (data.type === 'SPRINT_STARTED') {
+        sprintStartWordsRef.current = parseInt(manuscriptWordsRef.current) || 0;
+      }
       setTimeLeft(Math.max(0, data.endTime - Date.now()));
     }
     if (data.type === 'SPRINT_ENDED') {
@@ -149,8 +161,6 @@ function App() {
       posthog.capture('sprint_completed', {
         sprint_number: data.sprintNumber,
         word_count: finalWordCount,
-        word_goal: goalRef.current,
-        goal_reached: finalWordCount >= goalRef.current,
         duration_min: roomStateRef.current?.duration,
         writers_shared: data.logs.length,
       });
@@ -193,20 +203,17 @@ function App() {
   const createRoom = () => {
     posthog.capture('room_created', {
       genre,
-      word_goal: goal,
       is_private: isPrivate,
     });
     ws.send(JSON.stringify({
       type: 'CREATE_ROOM',
-      user: { name, goal, genre, displayMode, shareMyLog, isPrivate }
+      user: { name, goal: 500, genre, displayMode: 'numbers', shareMyLog, isPrivate }
     }));
   };
 
   const leaveRoom = () => {
     if (roomState?.status === 'active') {
       posthog.capture('left_during_sprint', {
-        word_count: myText.trim() === '' ? 0 : myText.trim().split(/\s+/).length,
-        word_goal: goal,
         duration_min: roomState.duration,
       });
     }
@@ -215,6 +222,8 @@ function App() {
     setSprintLogs([]);
     setMyText('');
     setTimeLeft(null);
+    setManuscriptWords('');
+    setManuscriptGoal('');
     joinLobby();
   };
 
@@ -234,6 +243,19 @@ function App() {
     setMyText(text);
     const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
     ws.send(JSON.stringify({ type: 'UPDATE_PROGRESS', wordCount, text }));
+
+    // Auto-advance manuscript word count during sprint
+    const updatedTotal = sprintStartWordsRef.current + wordCount;
+    setManuscriptWords(updatedTotal);
+    updateManuscript(updatedTotal, manuscriptGoal);
+  };
+
+  const updateManuscript = (currentWords, goal) => {
+    ws.send(JSON.stringify({
+      type: 'UPDATE_MANUSCRIPT',
+      currentWords: parseInt(currentWords) || 0,
+      goal: parseInt(goal) || 0,
+    }));
   };
 
   const toggleShareMyLog = () => {
@@ -263,6 +285,11 @@ function App() {
     return 'Waiting';
   };
 
+  const getPct = (current, goal) => {
+    if (!goal || goal <= 0) return 0;
+    return Math.min(100, Math.floor((current / goal) * 100));
+  };
+
   // ─── Views ─────────────────────────────────────────────────────────────────
 
   if (appView === 'setup') {
@@ -270,9 +297,9 @@ function App() {
       <div className="view setup-view">
         <div className="setup-card">
           <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
-          <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Matching you with other writers for productivity and collaboration</p>
-          <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Create a room and send an invite to your writing partners.</p>
-          <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Or search for an existing room to join others, in your genre, or with similar word count goals.</p>
+          <p className="tagline" style={{ textAlign: 'center' }}>Matching you with other writers for productivity and collaboration</p>
+          <p className="tagline" style={{ textAlign: 'center' }}>Create a room and send an invite to your writing partners.</p>
+          <p className="tagline" style={{ textAlign: 'center' }}>Or search for an existing room to join others in your genre.</p>
 
           <div className="form-group">
             <label>Your Name</label>
@@ -286,92 +313,31 @@ function App() {
             />
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Word Count Goal</label>
-              <input
-                type="number"
-                value={goal}
-                onChange={e => setGoal(Math.max(1, parseInt(e.target.value) || 0))}
-                min={1}
-                max={99999}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Genre</label>
-              <select value={genre} onChange={e => setGenre(e.target.value)}>
-                {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
+          <div className="form-group">
+            <label>Genre</label>
+            <select value={genre} onChange={e => setGenre(e.target.value)}>
+              {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
 
           <div className="form-row">
-            <div className="form-group">
-              <label>Display Progress As</label>
-              <div className="toggle-group">
-                <button
-                  className={displayMode === 'numbers' ? 'active' : ''}
-                  onClick={() => setDisplayMode('numbers')}
-                >
-                  Numbers
-                </button>
-                <button
-                  className={displayMode === 'percentage' ? 'active' : ''}
-                  onClick={() => setDisplayMode('percentage')}
-                >
-                  Percentage
-                </button>
-              </div>
-            </div>
-
             <div className="form-group">
               <label>Share Writing Log</label>
               <div className="toggle-group">
-                <button
-                  className={shareMyLog ? 'active' : ''}
-                  onClick={() => setShareMyLog(true)}
-                >
-                  Yes
-                </button>
-                <button
-                  className={!shareMyLog ? 'active' : ''}
-                  onClick={() => setShareMyLog(false)}
-                >
-                  No
-                </button>
+                <button className={shareMyLog ? 'active' : ''} onClick={() => setShareMyLog(true)}>Yes</button>
+                <button className={!shareMyLog ? 'active' : ''} onClick={() => setShareMyLog(false)}>No</button>
               </div>
             </div>
-          </div>
 
-          <div className="form-group">
             {!roomIdFromUrl && (
-              <p >
-                <label>Room Visibility (if creating)</label>
-
-              </p>
+              <div className="form-group">
+                <label>Room Visibility</label>
+                <div className="toggle-group">
+                  <button className={!isPrivate ? 'active' : ''} onClick={() => setIsPrivate(false)}>Public</button>
+                  <button className={isPrivate ? 'active' : ''} onClick={() => setIsPrivate(true)}>Private</button>
+                </div>
+              </div>
             )}
-
-            <div className="toggle-group">
-              {!roomIdFromUrl && (
-                <button
-                  className={!isPrivate ? 'active' : ''}
-                  onClick={() => setIsPrivate(false)}
-                >
-                  Public
-                </button>
-              )}
-              {!roomIdFromUrl && (
-                <button
-                  className={isPrivate ? 'active' : ''}
-                  onClick={() => setIsPrivate(true)}
-                >
-                  Private
-                </button>
-              )}
-
-            </div>
-
           </div>
 
           {roomIdFromUrl && (
@@ -398,9 +364,7 @@ function App() {
         <header className="lobby-header">
           <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
           <div className="lobby-meta">
-            <span className="lobby-user-chip">
-              ✍️ {name} · {goal} words · {genre}
-            </span>
+            <span className="lobby-user-chip">✍️ {name} · {genre}</span>
             <button className="btn-ghost" onClick={() => setAppView('setup')}>← Edit Profile</button>
             <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
               {isDarkMode ? 'Light' : 'Dark'}
@@ -411,7 +375,7 @@ function App() {
         <div className="lobby-body">
           <div className="lobby-intro">
             <h2>Rooms Matched For You</h2>
-            <p>Sorted by genre & goal compatibility. Join one or start your own.</p>
+            <p>Sorted by genre compatibility. Join one or start your own.</p>
           </div>
 
           <div className="room-cards">
@@ -433,7 +397,6 @@ function App() {
                   </div>
                   <div className="room-card-details">
                     <span className="room-tag">{room.genre}</span>
-                    <span className="room-tag">{room.goal.toLocaleString()} words</span>
                     {room.genre === genre && <span className="room-tag match-tag">🎯 Genre match</span>}
                   </div>
                   <button
@@ -490,18 +453,79 @@ function App() {
           {/* Participants */}
           <div className="participants">
             <h3>Writers</h3>
-
-            {roomState.users.map(u => (
-              <div key={u.id} className="participant-row">
-                <span className="participant-name">{u.name}</span>
-                <span>{u.id === roomState.hostId && '(Host)'}</span>
-                <span className="participant-progress">{u.displayProgress}</span>
-              </div>
-            ))}
+            {roomState.users.map(u => {
+              const pct = getPct(u.currentWords, u.goal);
+              return (
+                <div key={u.id} className="participant-row">
+                  <div className="participant-info">
+                    <span className="participant-name">
+                      {u.id === roomState.hostId && <span className="host-crown" title="Host">👑</span>}
+                      {u.name}
+                    </span>
+                    <span className="participant-sprint-words">
+                      {status === 'active' || status === 'finished'
+                        ? `+${u.sprintWords.toLocaleString()} this sprint`
+                        : u.goal > 0 && showWordCounts
+                          ? `${u.currentWords.toLocaleString()} / ${u.goal.toLocaleString()}`
+                          : null}
+                    </span>
+                  </div>
+                  {u.goal > 0 ? (
+                    <div className="progress-bar-track" title={`${pct}%`}>
+                      <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                    </div>
+                  ) : (
+                    <div className="progress-bar-track progress-bar-empty" />
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* My Settings */}
+          {/* Writer Settings */}
           <div className="my-settings">
+            <p className="settings-section-label">My Progress</p>
+
+            <div className="manuscript-inputs">
+              <div className="manuscript-field">
+                <label>Current words</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={manuscriptWords}
+                  placeholder="e.g. 15000"
+                  disabled={status === 'active'}
+                  onChange={e => {
+                    setManuscriptWords(e.target.value);
+                    updateManuscript(e.target.value, manuscriptGoal);
+                  }}
+                />
+              </div>
+              <div className="manuscript-field">
+                <label>Goal</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={manuscriptGoal}
+                  placeholder="e.g. 50000"
+                  disabled={status === 'active'}
+                  onChange={e => {
+                    setManuscriptGoal(e.target.value);
+                    updateManuscript(manuscriptWords, e.target.value);
+                  }}
+                />
+              </div>
+            </div>
+
+            <label className="inline-toggle">
+              <span>Show word counts</span>
+              <input
+                type="checkbox"
+                checked={showWordCounts}
+                onChange={e => setShowWordCounts(e.target.checked)}
+              />
+            </label>
+
             <label className="inline-toggle">
               <span>Share my log</span>
               <input type="checkbox" checked={shareMyLog} onChange={toggleShareMyLog} />
@@ -554,26 +578,33 @@ function App() {
                 </>
               )}
 
-              {status === 'active' && (
-                <div className="break-controls">
-                  <label>Break duration (min)
-                    <input
-                      type="number"
-                      value={breakDuration}
-                      min={1}
-                      max={60}
-                      onChange={e => setBreakDuration(parseInt(e.target.value) || 1)}
-                    />
-                  </label>
-                  <button className="btn-secondary full" onClick={startBreak}>
-                    Start Break
+              {/* Nothing shown while sprint is active — it runs to completion */}
+
+              {status === 'finished' && (
+                <div className="post-sprint-controls">
+                  <div className="break-controls">
+                    <label>Break duration (min)
+                      <input
+                        type="number"
+                        value={breakDuration}
+                        min={1}
+                        max={60}
+                        onChange={e => setBreakDuration(parseInt(e.target.value) || 1)}
+                      />
+                    </label>
+                    <button className="btn-secondary full" onClick={startBreak}>
+                      Start Break
+                    </button>
+                  </div>
+                  <button className="btn-primary full" onClick={setupNewSprint}>
+                    ▶ New Sprint
                   </button>
                 </div>
               )}
 
-              {(status === 'finished' || status === 'break') && (
+              {status === 'break' && (
                 <button className="btn-primary full" onClick={setupNewSprint}>
-                  New Sprint
+                  ▶ New Sprint
                 </button>
               )}
             </div>
@@ -600,7 +631,7 @@ function App() {
             {status !== 'waiting' && timeLeft === 0 && (
               <span className="timer done">Time's up!</span>
             )}
-            <span className="my-word-count">{myWordCount.toLocaleString()} / {goal.toLocaleString()} words</span>
+            <span className="my-word-count">{myWordCount.toLocaleString()} words this sprint</span>
           </div>
 
           {/* Writing Area */}

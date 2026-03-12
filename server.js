@@ -83,16 +83,13 @@ function broadcastRoomState(roomId) {
     const room = rooms.get(roomId);
     if (!room) return;
 
-    const usersList = Array.from(room.users.values()).map(u => {
-        let displayProgress = "0";
-        if (u.displayMode === 'percentage') {
-            const pct = Math.min(100, Math.floor((u.currentWords / u.goal) * 100));
-            displayProgress = `${pct}%`;
-        } else {
-            displayProgress = `${u.currentWords} / ${u.goal}`;
-        }
-        return { id: u.id, name: u.name, displayProgress };
-    });
+    const usersList = Array.from(room.users.values()).map(u => ({
+        id: u.id,
+        name: u.name,
+        currentWords: u.manuscriptWords ?? 0,
+        goal: u.manuscriptGoal ?? 0,
+        sprintWords: u.currentWords ?? 0,
+    }));
 
     for (const [ws, userData] of room.users.entries()) {
         ws.send(JSON.stringify({
@@ -173,6 +170,8 @@ serve({
                     goal: parseInt(data.user.goal) || 500,
                     displayMode: data.user.displayMode,
                     shareMyLog: data.user.shareMyLog,
+                    manuscriptWords: 0,
+                    manuscriptGoal: 0,
                     currentWords: 0,
                     text: ""
                 });
@@ -256,6 +255,15 @@ serve({
                 }
                 broadcastRoomState(ws.data.roomId);
                 updateAllLobbyUsers();
+            }
+
+            if (data.type === 'UPDATE_MANUSCRIPT') {
+                const user = room.users.get(ws);
+                if (user) {
+                    user.manuscriptWords = parseInt(data.currentWords) || 0;
+                    user.manuscriptGoal = parseInt(data.goal) || 0;
+                    broadcastRoomState(ws.data.roomId);
+                }
             }
 
             if (data.type === 'UPDATE_PROGRESS') {
