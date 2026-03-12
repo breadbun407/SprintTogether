@@ -101,6 +101,8 @@ function broadcastRoomState(roomId) {
             shareLog: room.shareLog,
             isPrivate: room.isPrivate,
             status: room.status,
+            endTime: room.endTime ?? null,
+            sprintCount: room.sprintCount,
             users: usersList,
             chat: room.chat
         }));
@@ -210,6 +212,7 @@ serve({
                 room.status = 'active';
                 room.sprintCount += 1;
                 const endTime = Date.now() + (room.duration * 60 * 1000);
+                room.endTime = endTime;
 
                 for (const w of room.users.keys()) {
                     w.send(JSON.stringify({ type: 'SPRINT_STARTED', endTime }));
@@ -237,6 +240,7 @@ serve({
             if (data.type === 'START_BREAK' && room.hostId === ws.data.id) {
                 room.status = 'break';
                 const endTime = Date.now() + (data.duration * 60 * 1000);
+                room.endTime = endTime;
                 for (const w of room.users.keys()) {
                     w.send(JSON.stringify({ type: 'BREAK_STARTED', endTime }));
                 }
@@ -246,6 +250,7 @@ serve({
             if (data.type === 'SETUP_NEW_SPRINT' && room.hostId === ws.data.id) {
                 if (room.timeoutId) clearTimeout(room.timeoutId);
                 room.status = 'waiting';
+                room.endTime = null;
                 for (const user of room.users.values()) {
                     user.currentWords = 0;
                     user.text = "";

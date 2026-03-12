@@ -50,6 +50,8 @@ function App() {
   const roomStateRef = useRef(roomState);
   const sprintStartWordsRef = useRef(0); // snapshot of manuscriptWords when sprint begins
   const manuscriptWordsRef = useRef(manuscriptWords);
+  const goalSetRef = useRef(false);     // has the user set a goal this session?
+  const goalReachedRef = useRef(false); // have we already fired goal_reached this session?
 
   useEffect(() => { appViewRef.current = appView; }, [appView]);
   useEffect(() => { myTextRef.current = myText; }, [myText]);
@@ -64,6 +66,12 @@ function App() {
         person_profiles: 'never',
       });
     }
+  }, []);
+
+  useEffect(() => {
+    const handleUnload = () => ws?.close();
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
   }, []);
 
   useEffect(() => {
@@ -114,6 +122,9 @@ function App() {
   }, [name, genre, shareMyLog]);
 
   const joinRoom = useCallback((targetRoomId) => {
+    posthog.capture('room_joined', {
+      source: window.location.hash ? 'invite_link' : 'matchmaking',
+    });
     ws.send(JSON.stringify({
       type: 'JOIN_ROOM',
       roomId: targetRoomId,
@@ -138,6 +149,10 @@ function App() {
       setDraftDuration(data.duration);
       setDraftShareLog(data.shareLog);
       setDraftIsPrivate(data.isPrivate ?? false);
+      // Seed timer for users who join mid-sprint or mid-break
+      if ((data.status === 'active' || data.status === 'break') && data.endTime) {
+        setTimeLeft(prev => prev ?? Math.max(0, data.endTime - Date.now()));
+      }
       setAppView('room');
       window.location.hash = data.roomId;
     }
@@ -164,6 +179,11 @@ function App() {
         duration_min: roomStateRef.current?.duration,
         writers_shared: data.logs.length,
       });
+      if (data.sprintNumber > 1) {
+        posthog.capture('multiple_sprints_completed', {
+          sprint_number: data.sprintNumber,
+        });
+      }
     }
     if (data.type === 'CLEAR_TEXT') {
       setMyText('');
@@ -217,6 +237,14 @@ function App() {
         duration_min: roomState.duration,
       });
     }
+    // Track room_empty if we're the last writer
+    if (roomState?.users?.length === 1) {
+      posthog.capture('room_empty', {
+        sprint_count: roomState.sprintCount ?? 0,
+      });
+    }
+    goalSetRef.current = false;
+    goalReachedRef.current = false;
     ws.send(JSON.stringify({ type: 'LEAVE_ROOM' }));
     setRoomState(null);
     setSprintLogs([]);
@@ -251,11 +279,22 @@ function App() {
   };
 
   const updateManuscript = (currentWords, goal) => {
-    ws.send(JSON.stringify({
-      type: 'UPDATE_MANUSCRIPT',
-      currentWords: parseInt(currentWords) || 0,
-      goal: parseInt(goal) || 0,
-    }));
+    const current = parseInt(currentWords) || 0;
+    const target = parseInt(goal) || 0;
+
+    // First time a goal is set this session
+    if (target > 0 && !goalSetRef.current) {
+      goalSetRef.current = true;
+      posthog.capture('manuscript_goal_set', { goal: target });
+    }
+
+    // First time current words meets or exceeds goal
+    if (target > 0 && current >= target && !goalReachedRef.current) {
+      goalReachedRef.current = true;
+      posthog.capture('goal_reached', { goal: target, current_words: current });
+    }
+
+    ws.send(JSON.stringify({ type: 'UPDATE_MANUSCRIPT', currentWords: current, goal: target }));
   };
 
   const toggleShareMyLog = () => {
@@ -264,8 +303,17 @@ function App() {
     ws.send(JSON.stringify({ type: 'UPDATE_SHARE_PREF', shareMyLog: next }));
   };
 
-  const startSprint = () => ws.send(JSON.stringify({ type: 'START_SPRINT' }));
-  const startBreak = () => ws.send(JSON.stringify({ type: 'START_BREAK', duration: breakDuration }));
+  const startSprint = () => {
+    posthog.capture('sprint_started', {
+      duration_min: roomStateRef.current?.duration,
+      writer_count: roomStateRef.current?.users?.length ?? 1,
+    });
+    ws.send(JSON.stringify({ type: 'START_SPRINT' }));
+  };
+  const startBreak = () => {
+    posthog.capture('break_started', { duration_min: breakDuration });
+    ws.send(JSON.stringify({ type: 'START_BREAK', duration: breakDuration }));
+  };
   const setupNewSprint = () => ws.send(JSON.stringify({ type: 'SETUP_NEW_SPRINT' }));
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -593,7 +641,7 @@ function App() {
                       />
                     </label>
                     <button className="btn-secondary full" onClick={startBreak}>
-                      Start Break
+                      ☕ Start Break
                     </button>
                   </div>
                   <button className="btn-primary full" onClick={setupNewSprint}>
