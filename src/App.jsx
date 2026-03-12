@@ -1,5 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import './App.css';
+import posthog from 'posthog-js'
+
+posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
+  api_host: 'https://us.i.posthog.com',
+  defaults: '2026-01-30',
+  person_profiles: 'never', // no persistent user profiles = lower privacy obligations
+})
 
 let ws = null;
 
@@ -13,6 +20,15 @@ function App() {
     return localStorage.getItem('theme') === 'dark' ||
       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
+
+  const myTextRef = useRef(myText);
+  const roomStateRef = useRef(roomState);
+
+  useEffect(() => { myTextRef.current = myText; }, [myText]);
+  useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
+
+  const goalRef = useRef(goal);
+  useEffect(() => { goalRef.current = goal; }, [goal]);
 
   // User Profile
   const [name, setName] = useState('');
@@ -134,6 +150,16 @@ function App() {
     if (data.type === 'SPRINT_ENDED') {
       setTimeLeft(0);
       setSprintLogs(prev => [{ sprintNumber: data.sprintNumber, logs: data.logs }, ...prev]);
+
+      const finalWordCount = myTextRef.current.trim() === '' ? 0 : myTextRef.current.trim().split(/\s+/).length;
+      posthog.capture('sprint_completed', {
+        sprint_number: data.sprintNumber,
+        word_count: finalWordCount,
+        word_goal: goalRef.current,
+        goal_reached: finalWordCount >= goalRef.current,
+        duration_min: roomStateRef.current?.duration,
+        writers_shared: data.logs.length,
+      });
     }
     if (data.type === 'CLEAR_TEXT') {
       setMyText('');
@@ -171,6 +197,11 @@ function App() {
   };
 
   const createRoom = () => {
+    posthog.capture('room_created', {
+      genre,
+      word_goal: goal,
+      is_private: isPrivate,
+    });
     ws.send(JSON.stringify({
       type: 'CREATE_ROOM',
       user: { name, goal, genre, displayMode, shareMyLog, isPrivate }
@@ -178,6 +209,13 @@ function App() {
   };
 
   const leaveRoom = () => {
+    if (roomState?.status === 'active') {
+      posthog.capture('left_during_sprint', {
+        word_count: myText.trim() === '' ? 0 : myText.trim().split(/\s+/).length,
+        word_goal: goal,
+        duration_min: roomState.duration,
+      });
+    }
     ws.send(JSON.stringify({ type: 'LEAVE_ROOM' }));
     setRoomState(null);
     setSprintLogs([]);
@@ -228,7 +266,7 @@ function App() {
     if (status === 'active') return 'Sprinting';
     if (status === 'finished') return 'Finished';
     if (status === 'break') return 'On Break';
-    return '⏳ Waiting';
+    return 'Waiting';
   };
 
   // ─── Views ─────────────────────────────────────────────────────────────────
@@ -237,10 +275,10 @@ function App() {
     return (
       <div className="view setup-view">
         <div className="setup-card">
-          <h1 className="logo">SprintR</h1>
-          <p className="tagline" style={{ textAlign: 'justify' }}>Matching you with other writers for productivity and collaboration</p>
-          <p className="tagline" style={{ textAlign: 'justify' }}>Create a room and send an invite to your writing partners.</p>
-          <p className="tagline" style={{ textAlign: 'justify' }}>Or search for an existing room to join others, in your genre, or with similar word</p>
+          <h1 className="logo" style={{ textAlign: 'center' }}>Sprint Linking</h1>
+          <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Matching you with other writers for productivity and collaboration</p>
+          <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Create a room and send an invite to your writing partners.</p>
+          <p className="tagline" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>Or search for an existing room to join others, in your genre, or with similar word count goals.</p>
 
           <div className="form-group">
             <label>Your Name</label>
@@ -250,7 +288,7 @@ function App() {
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
               placeholder="Public Display Name"
-              maxLength={30}
+              maxLength={10}
             />
           </div>
 
@@ -313,26 +351,38 @@ function App() {
           </div>
 
           <div className="form-group">
-            <label>Room Visibility (if creating)</label>
+            {!roomIdFromUrl && (
+              <p >
+                <label>Room Visibility (if creating)</label>
+
+              </p>
+            )}
+
             <div className="toggle-group">
-              <button
-                className={!isPrivate ? 'active' : ''}
-                onClick={() => setIsPrivate(false)}
-              >
-                Public
-              </button>
-              <button
-                className={isPrivate ? 'active' : ''}
-                onClick={() => setIsPrivate(true)}
-              >
-                Private
-              </button>
+              {!roomIdFromUrl && (
+                <button
+                  className={!isPrivate ? 'active' : ''}
+                  onClick={() => setIsPrivate(false)}
+                >
+                  Public
+                </button>
+              )}
+              {!roomIdFromUrl && (
+                <button
+                  className={isPrivate ? 'active' : ''}
+                  onClick={() => setIsPrivate(true)}
+                >
+                  Private
+                </button>
+              )}
+
             </div>
+
           </div>
 
           {roomIdFromUrl && (
             <p className="direct-link-notice">
-              🔗 You have a room invite link. You'll join directly.
+              You have a room invite link. You'll join directly.
             </p>
           )}
 
@@ -352,7 +402,7 @@ function App() {
     return (
       <div className="view lobby-view">
         <header className="lobby-header">
-          <h1 className="logo">SprintR</h1>
+          <h1 className="logo" style={{ textAlign: 'center' }}>Sprint Linking</h1>
           <div className="lobby-meta">
             <span className="lobby-user-chip">
               ✍️ {name} · {goal} words · {genre}
@@ -424,7 +474,7 @@ function App() {
         {/* ── Sidebar ── */}
         <aside className="sidebar">
           <div className="sidebar-top">
-            <h1 className="logo small">SprintR</h1>
+            <h1 className="logo" style={{ textAlign: 'center' }}>Sprint Linking</h1>
             <button className="btn-theme-toggle icon-only" onClick={() => setIsDarkMode(d => !d)}>
               {isDarkMode ? 'Light' : 'Dark'}
             </button>
@@ -446,9 +496,11 @@ function App() {
           {/* Participants */}
           <div className="participants">
             <h3>Writers</h3>
+
             {roomState.users.map(u => (
               <div key={u.id} className="participant-row">
                 <span className="participant-name">{u.name}</span>
+                <span>{u.id === roomState.hostId && '(Host)'}</span>
                 <span className="participant-progress">{u.displayProgress}</span>
               </div>
             ))}
@@ -470,7 +522,7 @@ function App() {
               {status === 'waiting' && (
                 <>
                   <button className="btn-primary full" onClick={startSprint}>
-                    ▶ Start Sprint ({roomState.duration} min)
+                    Start Sprint ({roomState.duration} min)
                   </button>
                   <button className="btn-ghost full settings-btn" onClick={() => setShowSettings(s => !s)}>
                     ⚙ Settings
@@ -495,7 +547,7 @@ function App() {
                         />
                       </label>
                       <label className="inline-toggle">
-                        <span>🔒 Private room</span>
+                        <span>Private room</span>
                         <input
                           type="checkbox"
                           checked={draftIsPrivate}
@@ -564,8 +616,8 @@ function App() {
             onChange={e => updateProgress(e.target.value)}
             placeholder={
               status === 'waiting' ? "Waiting for the host to start the sprint…" :
-                status === 'active' ? "Write! The clock is ticking…" :
-                  status === 'break' ? "Sprint over. Stretch your fingers ☕" :
+                status === 'active' ? "Time to write" :
+                  status === 'break' ? "Sprint over. Stretch your fingers" :
                     "Sprint complete."
             }
             disabled={status !== 'active'}
@@ -599,7 +651,7 @@ function App() {
           <h3>Chat</h3>
           <div className="chat-messages">
             {roomState.chat.length === 0 && (
-              <p className="chat-empty">No messages yet. Say hi! 👋</p>
+              <p className="chat-empty">No messages yet. <br />Say hi!</p>
             )}
             {roomState.chat.map((msg, i) => (
               <div key={i} className="chat-message">

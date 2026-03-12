@@ -99,6 +99,7 @@ function broadcastRoomState(roomId) {
             type: 'ROOM_STATE',
             roomId,
             isHost: room.hostId === userData.id,
+            hostId: room.hostId,
             duration: room.duration,
             shareLog: room.shareLog,
             isPrivate: room.isPrivate,
