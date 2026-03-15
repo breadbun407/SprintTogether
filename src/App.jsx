@@ -6,6 +6,38 @@ let ws = null;
 
 const GENRES = ["Any Genre", "Fantasy", "Sci-Fi", "Romance", "Thriller", "Horror", "Mystery", "Non-Fiction", "General Fiction"];
 
+const SWATCHES = [
+  { key: 'green', color: '#6ecf9f' },
+  { key: 'teal', color: '#2bbcb0' },
+  { key: 'blue', color: '#5b9cf6' },
+  { key: 'slate', color: '#6e8ef0' },
+  { key: 'purple', color: '#9b6ef3' },
+  { key: 'pink', color: '#e8609a' },
+  { key: 'red', color: '#f05a6e' },
+  { key: 'orange', color: '#f5894a' },
+];
+
+function ThemePicker({ colorTheme, setColorTheme, isDarkMode, setIsDarkMode }) {
+  return (
+    <div className="theme-picker-wrap">
+      <div className="theme-picker-swatches">
+        {SWATCHES.map(s => (
+          <button
+            key={s.key}
+            className={`swatch ${colorTheme === s.key ? 'active' : ''}`}
+            style={{ background: s.color }}
+            onClick={() => setColorTheme(s.key)}
+            title={s.key.charAt(0).toUpperCase() + s.key.slice(1)}
+          />
+        ))}
+        <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
+          {isDarkMode ? 'Light' : 'Dark'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [appView, setAppView] = useState('setup'); // 'setup', 'lobby', 'room'
   const [roomIdFromUrl, setRoomIdFromUrl] = useState(window.location.hash.slice(1));
@@ -14,6 +46,8 @@ function App() {
     return localStorage.getItem('theme') === 'dark' ||
       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
+
+  const [colorTheme, setColorTheme] = useState(() => localStorage.getItem('colorTheme') || 'green');
 
   // User Profile
   const [name, setName] = useState('');
@@ -31,10 +65,11 @@ function App() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [sprintLogs, setSprintLogs] = useState([]);
   const [breakDuration, setBreakDuration] = useState(5);
+  const [activePane, setActivePane] = useState('write'); // 'write' | 'read'
 
   // Manuscript progress (set inside the room)
-  const [manuscriptWords, setManuscriptWords] = useState('');
-  const [manuscriptGoal, setManuscriptGoal] = useState('');
+  const [manuscriptWords, setManuscriptWords] = useState(0);
+  const [manuscriptGoal, setManuscriptGoal] = useState(500);
   const [showWordCounts, setShowWordCounts] = useState(false);
 
   // Settings panel (host only)
@@ -48,6 +83,7 @@ function App() {
   const appViewRef = useRef(appView);
   const myTextRef = useRef(myText);
   const roomStateRef = useRef(roomState);
+  const editorRef = useRef(null);
   const sprintStartWordsRef = useRef(0); // snapshot of manuscriptWords when sprint begins
   const manuscriptWordsRef = useRef(manuscriptWords);
   const goalSetRef = useRef(false);     // has the user set a goal this session?
@@ -57,6 +93,13 @@ function App() {
   useEffect(() => { myTextRef.current = myText; }, [myText]);
   useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
   useEffect(() => { manuscriptWordsRef.current = manuscriptWords; }, [manuscriptWords]);
+
+  // Clear the rich editor when CLEAR_TEXT fires (sets myText to '')
+  useEffect(() => {
+    if (myText === '' && editorRef.current) {
+      editorRef.current.innerHTML = '';
+    }
+  }, [myText]);
 
   useEffect(() => {
     if (import.meta.env.VITE_PUBLIC_POSTHOG_KEY) {
@@ -89,6 +132,15 @@ function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    if (colorTheme === 'green') {
+      document.documentElement.removeAttribute('data-color');
+    } else {
+      document.documentElement.setAttribute('data-color', colorTheme);
+    }
+    localStorage.setItem('colorTheme', colorTheme);
+  }, [colorTheme]);
 
   useEffect(() => {
     if (!timeLeft) return;
@@ -171,6 +223,7 @@ function App() {
     if (data.type === 'SPRINT_ENDED') {
       setTimeLeft(0);
       setSprintLogs(prev => [{ sprintNumber: data.sprintNumber, logs: data.logs }, ...prev]);
+      if (data.logs.length > 0) setActivePane('read');
 
       const finalWordCount = myTextRef.current.trim() === '' ? 0 : myTextRef.current.trim().split(/\s+/).length;
       posthog.capture('sprint_completed', {
@@ -188,6 +241,7 @@ function App() {
     if (data.type === 'CLEAR_TEXT') {
       setMyText('');
       setTimeLeft(null);
+      setActivePane('write');
     }
   }, [joinLobby]);
 
@@ -250,8 +304,8 @@ function App() {
     setSprintLogs([]);
     setMyText('');
     setTimeLeft(null);
-    setManuscriptWords('');
-    setManuscriptGoal('');
+    setManuscriptWords(0);
+    setManuscriptGoal(500);
     joinLobby();
   };
 
@@ -267,15 +321,30 @@ function App() {
     setShowSettings(false);
   };
 
-  const updateProgress = (text) => {
-    setMyText(text);
+  const handleEditorInput = () => {
+    const text = editorRef.current?.innerText || '';
+    const html = editorRef.current?.innerHTML || '';
     const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-    ws.send(JSON.stringify({ type: 'UPDATE_PROGRESS', wordCount, text }));
+    setMyText(text);
+    ws.send(JSON.stringify({ type: 'UPDATE_PROGRESS', wordCount, text: html }));
 
     // Auto-advance manuscript word count during sprint
     const updatedTotal = sprintStartWordsRef.current + wordCount;
     setManuscriptWords(updatedTotal);
     updateManuscript(updatedTotal, manuscriptGoal);
+  };
+
+  const handleEditorKeyDown = (e) => {
+    // Tab inserts indent instead of leaving the field
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      document.execCommand('insertText', false, '\u00a0\u00a0\u00a0\u00a0');
+    }
+  };
+
+  const format = (command, value = null) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
   };
 
   const updateManuscript = (currentWords, goal) => {
@@ -357,18 +426,16 @@ function App() {
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
               placeholder="Public Display Name"
-              maxLength={10}
+              maxLength={35}
             />
           </div>
 
-          {!roomIdFromUrl && (
-            <div className="form-group">
-              <label>Genre</label>
-              <select value={genre} onChange={e => setGenre(e.target.value)}>
-                {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-          )}
+          <div className="form-group">
+            <label>Genre</label>
+            <select value={genre} onChange={e => setGenre(e.target.value)}>
+              {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
 
           <div className="form-row">
             <div className="form-group">
@@ -400,9 +467,7 @@ function App() {
             {roomIdFromUrl ? 'Join Room →' : 'Find a Match →'}
           </button>
 
-          <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
-            {isDarkMode ? 'Light' : 'Dark'}
-          </button>
+          <ThemePicker colorTheme={colorTheme} setColorTheme={setColorTheme} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
         </div>
       </div>
     );
@@ -416,9 +481,7 @@ function App() {
           <div className="lobby-meta">
             <span className="lobby-user-chip">✍️ {name} · {genre}</span>
             <button className="btn-ghost" onClick={() => setAppView('setup')}>← Edit Profile</button>
-            <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
-              {isDarkMode ? 'Light' : 'Dark'}
-            </button>
+            <ThemePicker colorTheme={colorTheme} setColorTheme={setColorTheme} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
           </div>
         </header>
 
@@ -482,9 +545,7 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-top">
             <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
-            <button className="btn-theme-toggle icon-only" onClick={() => setIsDarkMode(d => !d)}>
-              {isDarkMode ? 'Light' : 'Dark'}
-            </button>
+            <ThemePicker colorTheme={colorTheme} setColorTheme={setColorTheme} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
           </div>
 
           {/* Room Info */}
@@ -669,7 +730,7 @@ function App() {
         {/* ── Main Area ── */}
         <main className="room-main">
 
-          {/* Status Bar */}
+          {/* Status Bar + Tabs */}
           <div className={`status-bar status-${status}`}>
             <span className="status-label">{statusLabel(status)}</span>
             {status === 'waiting' && (
@@ -682,43 +743,110 @@ function App() {
               <span className="timer done">Time's up!</span>
             )}
             <span className="my-word-count">{myWordCount.toLocaleString()} words this sprint</span>
+
+            <div className="pane-tabs">
+              <button
+                className={`pane-tab ${activePane === 'write' ? 'active' : ''}`}
+                onClick={() => setActivePane('write')}
+              >Write</button>
+              <button
+                className={`pane-tab ${activePane === 'read' ? 'active' : ''} ${sprintLogs.length === 0 ? 'pane-tab-disabled' : ''}`}
+                onClick={() => sprintLogs.length > 0 && setActivePane('read')}
+                title={sprintLogs.length === 0 ? 'No logs yet — complete a sprint first' : ''}
+              >
+                Read
+                {sprintLogs.length > 0 && <span className="pane-tab-badge">{sprintLogs.length}</span>}
+              </button>
+            </div>
           </div>
 
-          {/* Writing Area */}
-          <textarea
-            className="writing-area"
-            value={myText}
-            onChange={e => updateProgress(e.target.value)}
-            placeholder={
-              status === 'waiting' ? "Waiting for the host to start the sprint…" :
-                status === 'active' ? "Time to write" :
-                  status === 'break' ? "Sprint over. Stretch your fingers" :
-                    "Sprint complete."
-            }
-            disabled={status !== 'active'}
-            spellCheck={true}
-          />
+          {/* Write Pane */}
+          {activePane === 'write' && (
+            <>
+              {/* Toolbar */}
+              <div className={`editor-toolbar ${status !== 'active' ? 'toolbar-disabled' : ''}`}>
+                <div className="toolbar-group">
+                  <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('bold'); }} title="Bold"><b>B</b></button>
+                  <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('italic'); }} title="Italic"><i>I</i></button>
+                  <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('underline'); }} title="Underline"><u>U</u></button>
+                </div>
+                <div className="toolbar-divider" />
+                <div className="toolbar-group">
+                  <select
+                    className="toolbar-select"
+                    defaultValue=""
+                    onChange={e => { format('fontName', e.target.value); editorRef.current?.focus(); }}
+                    title="Font"
+                  >
+                    <option value="" disabled>Font</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Palatino Linotype">Palatino</option>
+                    <option value="Courier New">Courier</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                  </select>
+                  <select
+                    className="toolbar-select"
+                    defaultValue=""
+                    onChange={e => { format('fontSize', e.target.value); editorRef.current?.focus(); }}
+                    title="Size"
+                  >
+                    <option value="" disabled>Size</option>
+                    <option value="1">Small</option>
+                    <option value="3">Normal</option>
+                    <option value="4">Large</option>
+                    <option value="5">XL</option>
+                    <option value="6">XXL</option>
+                  </select>
+                </div>
+              </div>
 
-          {/* Sprint Logs */}
-          {sprintLogs.length > 0 && (
-            <div className="sprint-logs">
-              {sprintLogs.map(log => (
-                <details key={log.sprintNumber} className="sprint-log-entry">
-                  <summary>Sprint #{log.sprintNumber} — {log.logs.length} shared log{log.logs.length !== 1 ? 's' : ''}</summary>
-                  {log.logs.length === 0 ? (
-                    <p className="no-logs">No one shared their writing this sprint.</p>
-                  ) : (
-                    log.logs.map((l, i) => (
-                      <div key={i} className="log-block">
-                        <p className="log-author">{l.name}</p>
-                        <p className="log-text">{l.text}</p>
-                      </div>
-                    ))
-                  )}
-                </details>
-              ))}
+              {/* Rich Writing Area */}
+              <div
+                ref={editorRef}
+                className="writing-area rich-editor"
+                contentEditable={status === 'active'}
+                suppressContentEditableWarning
+                onInput={handleEditorInput}
+                onKeyDown={handleEditorKeyDown}
+                data-placeholder={
+                  status === 'waiting' ? 'Waiting for the host to start the sprint…' :
+                    status === 'active' ? 'Time to write…' :
+                      status === 'break' ? 'Sprint over. Stretch your fingers.' :
+                        'Sprint complete.'
+                }
+              />
+            </>
+          )}
+
+          {/* Read Pane */}
+          {activePane === 'read' && (
+            <div className="read-pane">
+              {sprintLogs.length === 0 ? (
+                <p className="read-pane-empty">No sprint logs yet. Complete a sprint to see writing here.</p>
+              ) : (
+                sprintLogs.map(log => (
+                  <div key={log.sprintNumber} className="read-sprint-group">
+                    <h2 className="read-sprint-heading">Sprint {log.sprintNumber}</h2>
+                    {log.logs.length === 0 ? (
+                      <p className="read-no-logs">No one shared their writing this sprint.</p>
+                    ) : (
+                      log.logs.map((l, i) => (
+                        <div key={i} className="read-entry">
+                          <p className="read-author">{l.name}</p>
+                          <div
+                            className="read-text"
+                            dangerouslySetInnerHTML={{ __html: l.text }}
+                          />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           )}
+
         </main>
 
         {/* ── Chat ── */}
