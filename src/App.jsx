@@ -7,13 +7,13 @@ let ws = null;
 const GENRES = ["Any Genre", "Fantasy", "Sci-Fi", "Romance", "Thriller", "Horror", "Mystery", "Non-Fiction", "General Fiction"];
 
 const SWATCHES = [
-  { key: 'green', color: '#6ecf9f' },
-  { key: 'teal', color: '#2bbcb0' },
-  { key: 'blue', color: '#5b9cf6' },
-  { key: 'slate', color: '#6e8ef0' },
+  { key: 'green',  color: '#6ecf9f' },
+  { key: 'teal',   color: '#2bbcb0' },
+  { key: 'blue',   color: '#5b9cf6' },
+  { key: 'slate',  color: '#6e8ef0' },
   { key: 'purple', color: '#9b6ef3' },
-  { key: 'pink', color: '#e8609a' },
-  { key: 'red', color: '#f05a6e' },
+  { key: 'pink',   color: '#e8609a' },
+  { key: 'red',    color: '#f05a6e' },
   { key: 'orange', color: '#f5894a' },
 ];
 
@@ -227,9 +227,9 @@ function App() {
 
       const finalWordCount = myTextRef.current.trim() === '' ? 0 : myTextRef.current.trim().split(/\s+/).length;
       posthog.capture('sprint_completed', {
-        sprint_number: data.sprintNumber,
-        word_count: finalWordCount,
-        duration_min: roomStateRef.current?.duration,
+        sprint_number:  data.sprintNumber,
+        word_count:     finalWordCount,
+        duration_min:   roomStateRef.current?.duration,
         writers_shared: data.logs.length,
       });
       if (data.sprintNumber > 1) {
@@ -349,7 +349,7 @@ function App() {
 
   const updateManuscript = (currentWords, goal) => {
     const current = parseInt(currentWords) || 0;
-    const target = parseInt(goal) || 0;
+    const target  = parseInt(goal) || 0;
 
     // First time a goal is set this session
     if (target > 0 && !goalSetRef.current) {
@@ -374,8 +374,8 @@ function App() {
 
   const startSprint = () => {
     posthog.capture('sprint_started', {
-      duration_min: roomStateRef.current?.duration,
-      writer_count: roomStateRef.current?.users?.length ?? 1,
+      duration_min:  roomStateRef.current?.duration,
+      writer_count:  roomStateRef.current?.users?.length ?? 1,
     });
     ws.send(JSON.stringify({ type: 'START_SPRINT' }));
   };
@@ -704,7 +704,7 @@ function App() {
                       />
                     </label>
                     <button className="btn-secondary full" onClick={startBreak}>
-                      ☕ Start Break
+                      Start Break
                     </button>
                   </div>
                   <button className="btn-primary full" onClick={setupNewSprint}>
@@ -748,23 +748,22 @@ function App() {
               <button
                 className={`pane-tab ${activePane === 'write' ? 'active' : ''}`}
                 onClick={() => setActivePane('write')}
-              >Write</button>
+              >✍️ Write</button>
               <button
                 className={`pane-tab ${activePane === 'read' ? 'active' : ''} ${sprintLogs.length === 0 ? 'pane-tab-disabled' : ''}`}
                 onClick={() => sprintLogs.length > 0 && setActivePane('read')}
                 title={sprintLogs.length === 0 ? 'No logs yet — complete a sprint first' : ''}
               >
-                Read
+                📖 Read
                 {sprintLogs.length > 0 && <span className="pane-tab-badge">{sprintLogs.length}</span>}
               </button>
             </div>
           </div>
 
-          {/* Write Pane */}
-          {activePane === 'write' && (
-            <>
-              {/* Toolbar */}
-              <div className={`editor-toolbar ${status !== 'active' ? 'toolbar-disabled' : ''}`}>
+          {/* Write Pane — always mounted to preserve editor content */}
+          <div style={{ display: activePane === 'write' ? 'contents' : 'none' }}>
+            {/* Toolbar */}
+            <div className={`editor-toolbar ${status !== 'active' ? 'toolbar-disabled' : ''}`}>
                 <div className="toolbar-group">
                   <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('bold'); }} title="Bold"><b>B</b></button>
                   <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('italic'); }} title="Italic"><i>I</i></button>
@@ -811,13 +810,12 @@ function App() {
                 onKeyDown={handleEditorKeyDown}
                 data-placeholder={
                   status === 'waiting' ? 'Waiting for the host to start the sprint…' :
-                    status === 'active' ? 'Time to write…' :
-                      status === 'break' ? 'Sprint over. Stretch your fingers.' :
-                        'Sprint complete.'
+                  status === 'active'  ? 'Time to write…' :
+                  status === 'break'   ? 'Sprint over. Stretch your fingers.' :
+                  'Sprint complete.'
                 }
               />
-            </>
-          )}
+          </div>
 
           {/* Read Pane */}
           {activePane === 'read' && (
@@ -832,13 +830,15 @@ function App() {
                       <p className="read-no-logs">No one shared their writing this sprint.</p>
                     ) : (
                       log.logs.map((l, i) => (
-                        <div key={i} className="read-entry">
-                          <p className="read-author">{l.name}</p>
+                        <details key={i} className="read-entry">
+                          <summary className="read-entry-summary">
+                            <span className="read-author">{l.name}</span>
+                          </summary>
                           <div
                             className="read-text"
                             dangerouslySetInnerHTML={{ __html: l.text }}
                           />
-                        </div>
+                        </details>
                       ))
                     )}
                   </div>
