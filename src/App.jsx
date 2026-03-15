@@ -570,7 +570,6 @@ function App() {
           <div className="participants">
             <h3>Writers</h3>
             {roomState.users.map(u => {
-              const pct = getPct(u.currentWords, u.goal);
               return (
                 <div key={u.id} className="participant-row">
                   <div className="participant-info">
@@ -579,16 +578,18 @@ function App() {
                       {u.name}
                     </span>
                     <span className="participant-sprint-words">
-                      {status === 'active' || status === 'finished'
-                        ? `+${u.sprintWords.toLocaleString()} this sprint`
-                        : u.goal > 0 && showWordCounts
-                          ? `${u.currentWords.toLocaleString()} / ${u.goal.toLocaleString()}`
-                          : null}
+                      {(status === 'active' || status === 'finished') && `+${u.sprintWords.toLocaleString()} this sprint`}
                     </span>
                   </div>
+                  {showWordCounts && u.goal > 0 && (
+                    <div className="participant-wordcount">
+                      <span>{u.currentWords.toLocaleString()} words</span>
+                      <span>{u.goal.toLocaleString()} goal</span>
+                    </div>
+                  )}
                   {u.goal > 0 ? (
-                    <div className="progress-bar-track" title={`${pct}%`}>
-                      <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                    <div className="progress-bar-track" title={`${getPct(u.currentWords, u.goal)}%`}>
+                      <div className="progress-bar-fill" style={{ width: `${getPct(u.currentWords, u.goal)}%` }} />
                     </div>
                   ) : (
                     <div className="progress-bar-track progress-bar-empty" />
