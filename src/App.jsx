@@ -7,33 +7,36 @@ let ws = null;
 const GENRES = ["Any Genre", "Fantasy", "Sci-Fi", "Romance", "Thriller", "Horror", "Mystery", "Non-Fiction", "General Fiction"];
 
 const SWATCHES = [
-  { key: 'green',  color: '#6ecf9f' },
-  { key: 'teal',   color: '#2bbcb0' },
-  { key: 'blue',   color: '#5b9cf6' },
-  { key: 'slate',  color: '#6e8ef0' },
+  { key: 'green', color: '#6ecf9f' },
+  { key: 'teal', color: '#2bbcb0' },
+  { key: 'blue', color: '#5b9cf6' },
+  { key: 'slate', color: '#6e8ef0' },
   { key: 'purple', color: '#9b6ef3' },
-  { key: 'pink',   color: '#e8609a' },
-  { key: 'red',    color: '#f05a6e' },
+  { key: 'pink', color: '#e8609a' },
+  { key: 'red', color: '#f05a6e' },
   { key: 'orange', color: '#f5894a' },
 ];
 
-function ThemePicker({ colorTheme, setColorTheme, isDarkMode, setIsDarkMode }) {
+function DarkToggle({ isDarkMode, setIsDarkMode }) {
   return (
-    <div className="theme-picker-wrap">
-      <div className="theme-picker-swatches">
-        {SWATCHES.map(s => (
-          <button
-            key={s.key}
-            className={`swatch ${colorTheme === s.key ? 'active' : ''}`}
-            style={{ background: s.color }}
-            onClick={() => setColorTheme(s.key)}
-            title={s.key.charAt(0).toUpperCase() + s.key.slice(1)}
-          />
-        ))}
-        <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
-          {isDarkMode ? 'Light' : 'Dark'}
-        </button>
-      </div>
+    <button className="btn-theme-toggle" onClick={() => setIsDarkMode(d => !d)}>
+      {isDarkMode ? 'Light' : 'Dark'}
+    </button>
+  );
+}
+
+function ColorPicker({ colorTheme, setColorTheme }) {
+  return (
+    <div className="theme-picker-swatches">
+      {SWATCHES.map(s => (
+        <button
+          key={s.key}
+          className={`swatch ${colorTheme === s.key ? 'active' : ''}`}
+          style={{ background: s.color }}
+          onClick={() => setColorTheme(s.key)}
+          title={s.key.charAt(0).toUpperCase() + s.key.slice(1)}
+        />
+      ))}
     </div>
   );
 }
@@ -227,9 +230,9 @@ function App() {
 
       const finalWordCount = myTextRef.current.trim() === '' ? 0 : myTextRef.current.trim().split(/\s+/).length;
       posthog.capture('sprint_completed', {
-        sprint_number:  data.sprintNumber,
-        word_count:     finalWordCount,
-        duration_min:   roomStateRef.current?.duration,
+        sprint_number: data.sprintNumber,
+        word_count: finalWordCount,
+        duration_min: roomStateRef.current?.duration,
         writers_shared: data.logs.length,
       });
       if (data.sprintNumber > 1) {
@@ -349,7 +352,7 @@ function App() {
 
   const updateManuscript = (currentWords, goal) => {
     const current = parseInt(currentWords) || 0;
-    const target  = parseInt(goal) || 0;
+    const target = parseInt(goal) || 0;
 
     // First time a goal is set this session
     if (target > 0 && !goalSetRef.current) {
@@ -374,8 +377,8 @@ function App() {
 
   const startSprint = () => {
     posthog.capture('sprint_started', {
-      duration_min:  roomStateRef.current?.duration,
-      writer_count:  roomStateRef.current?.users?.length ?? 1,
+      duration_min: roomStateRef.current?.duration,
+      writer_count: roomStateRef.current?.users?.length ?? 1,
     });
     ws.send(JSON.stringify({ type: 'START_SPRINT' }));
   };
@@ -413,6 +416,7 @@ function App() {
     return (
       <div className="view setup-view">
         <div className="setup-card">
+          <DarkToggle isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
           <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
           <p className="tagline" style={{ textAlign: 'center' }}>Matching you with other writers for productivity and collaboration</p>
           <p className="tagline" style={{ textAlign: 'center' }}>Create a room and send an invite to your writing partners.</p>
@@ -426,7 +430,7 @@ function App() {
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
               placeholder="Public Display Name"
-              maxLength={35}
+              maxLength={20}
             />
           </div>
 
@@ -467,7 +471,7 @@ function App() {
             {roomIdFromUrl ? 'Join Room →' : 'Find a Match →'}
           </button>
 
-          <ThemePicker colorTheme={colorTheme} setColorTheme={setColorTheme} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
+          <ColorPicker colorTheme={colorTheme} setColorTheme={setColorTheme} />
         </div>
       </div>
     );
@@ -479,9 +483,10 @@ function App() {
         <header className="lobby-header">
           <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
           <div className="lobby-meta">
-            <span className="lobby-user-chip">✍️ {name} · {genre}</span>
+            <span className="lobby-user-chip">{name} · {genre}</span>
             <button className="btn-ghost" onClick={() => setAppView('setup')}>← Edit Profile</button>
-            <ThemePicker colorTheme={colorTheme} setColorTheme={setColorTheme} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
+            <DarkToggle isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
+            <ColorPicker colorTheme={colorTheme} setColorTheme={setColorTheme} />
           </div>
         </header>
 
@@ -510,7 +515,7 @@ function App() {
                   </div>
                   <div className="room-card-details">
                     <span className="room-tag">{room.genre}</span>
-                    {room.genre === genre && <span className="room-tag match-tag">🎯 Genre match</span>}
+                    {room.genre === genre && <span className="room-tag match-tag">Genre match</span>}
                   </div>
                   <button
                     className="btn-join"
@@ -545,7 +550,7 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-top">
             <h1 className="logo" style={{ textAlign: 'center' }}>SprintR</h1>
-            <ThemePicker colorTheme={colorTheme} setColorTheme={setColorTheme} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
+            <DarkToggle isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
           </div>
 
           {/* Room Info */}
@@ -723,6 +728,7 @@ function App() {
 
           {/* Leave */}
           <div className="sidebar-footer">
+            <ColorPicker colorTheme={colorTheme} setColorTheme={setColorTheme} />
             <button className="btn-danger" onClick={leaveRoom}>← Leave Room</button>
           </div>
         </aside>
@@ -748,13 +754,13 @@ function App() {
               <button
                 className={`pane-tab ${activePane === 'write' ? 'active' : ''}`}
                 onClick={() => setActivePane('write')}
-              >✍️ Write</button>
+              >Write</button>
               <button
                 className={`pane-tab ${activePane === 'read' ? 'active' : ''} ${sprintLogs.length === 0 ? 'pane-tab-disabled' : ''}`}
                 onClick={() => sprintLogs.length > 0 && setActivePane('read')}
                 title={sprintLogs.length === 0 ? 'No logs yet — complete a sprint first' : ''}
               >
-                📖 Read
+                Read
                 {sprintLogs.length > 0 && <span className="pane-tab-badge">{sprintLogs.length}</span>}
               </button>
             </div>
@@ -764,57 +770,57 @@ function App() {
           <div style={{ display: activePane === 'write' ? 'contents' : 'none' }}>
             {/* Toolbar */}
             <div className={`editor-toolbar ${status !== 'active' ? 'toolbar-disabled' : ''}`}>
-                <div className="toolbar-group">
-                  <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('bold'); }} title="Bold"><b>B</b></button>
-                  <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('italic'); }} title="Italic"><i>I</i></button>
-                  <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('underline'); }} title="Underline"><u>U</u></button>
-                </div>
-                <div className="toolbar-divider" />
-                <div className="toolbar-group">
-                  <select
-                    className="toolbar-select"
-                    defaultValue=""
-                    onChange={e => { format('fontName', e.target.value); editorRef.current?.focus(); }}
-                    title="Font"
-                  >
-                    <option value="" disabled>Font</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Palatino Linotype">Palatino</option>
-                    <option value="Courier New">Courier</option>
-                    <option value="Arial">Arial</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                  </select>
-                  <select
-                    className="toolbar-select"
-                    defaultValue=""
-                    onChange={e => { format('fontSize', e.target.value); editorRef.current?.focus(); }}
-                    title="Size"
-                  >
-                    <option value="" disabled>Size</option>
-                    <option value="1">Small</option>
-                    <option value="3">Normal</option>
-                    <option value="4">Large</option>
-                    <option value="5">XL</option>
-                    <option value="6">XXL</option>
-                  </select>
-                </div>
+              <div className="toolbar-group">
+                <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('bold'); }} title="Bold"><b>B</b></button>
+                <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('italic'); }} title="Italic"><i>I</i></button>
+                <button className="toolbar-btn" onMouseDown={e => { e.preventDefault(); format('underline'); }} title="Underline"><u>U</u></button>
               </div>
+              <div className="toolbar-divider" />
+              <div className="toolbar-group">
+                <select
+                  className="toolbar-select"
+                  defaultValue=""
+                  onChange={e => { format('fontName', e.target.value); editorRef.current?.focus(); }}
+                  title="Font"
+                >
+                  <option value="" disabled>Font</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Palatino Linotype">Palatino</option>
+                  <option value="Courier New">Courier</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                </select>
+                <select
+                  className="toolbar-select"
+                  defaultValue=""
+                  onChange={e => { format('fontSize', e.target.value); editorRef.current?.focus(); }}
+                  title="Size"
+                >
+                  <option value="" disabled>Size</option>
+                  <option value="1">Small</option>
+                  <option value="3">Normal</option>
+                  <option value="4">Large</option>
+                  <option value="5">XL</option>
+                  <option value="6">XXL</option>
+                </select>
+              </div>
+            </div>
 
-              {/* Rich Writing Area */}
-              <div
-                ref={editorRef}
-                className="writing-area rich-editor"
-                contentEditable={status === 'active'}
-                suppressContentEditableWarning
-                onInput={handleEditorInput}
-                onKeyDown={handleEditorKeyDown}
-                data-placeholder={
-                  status === 'waiting' ? 'Waiting for the host to start the sprint…' :
-                  status === 'active'  ? 'Time to write…' :
-                  status === 'break'   ? 'Sprint over. Stretch your fingers.' :
-                  'Sprint complete.'
-                }
-              />
+            {/* Rich Writing Area */}
+            <div
+              ref={editorRef}
+              className="writing-area rich-editor"
+              contentEditable={status === 'active'}
+              suppressContentEditableWarning
+              onInput={handleEditorInput}
+              onKeyDown={handleEditorKeyDown}
+              data-placeholder={
+                status === 'waiting' ? 'Waiting for the host to start the sprint…' :
+                  status === 'active' ? 'Time to write…' :
+                    status === 'break' ? 'Sprint over. Stretch your fingers.' :
+                      'Sprint complete.'
+              }
+            />
           </div>
 
           {/* Read Pane */}
