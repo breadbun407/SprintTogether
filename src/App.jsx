@@ -60,6 +60,7 @@ function App() {
 
   // Matchmaking Lobby
   const [lobbyRooms, setLobbyRooms] = useState([]);
+  const [kickedNotice, setKickedNotice] = useState(false);
 
   // Room State
   const [roomState, setRoomState] = useState(null);
@@ -200,6 +201,7 @@ function App() {
       if (appViewRef.current !== 'room') setAppView('lobby');
     }
     if (data.type === 'ROOM_STATE') {
+      setKickedNotice(false);
       setRoomState(data);
       setDraftDuration(data.duration);
       setDraftShareLog(data.shareLog);
@@ -210,6 +212,12 @@ function App() {
       }
       setAppView('room');
       window.location.hash = data.roomId;
+    }
+    if (data.type === 'KICKED') {
+      setKickedNotice(true);
+      setRoomState(null);
+      window.location.hash = '';
+      joinLobby();
     }
     if (data.type === 'ROOM_CLOSED') {
       alert("The host has left and the room was closed.");
@@ -430,7 +438,7 @@ function App() {
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && connectAndFindMatches()}
               placeholder="Public Display Name"
-              maxLength={20}
+              maxLength={30}
             />
           </div>
 
@@ -491,6 +499,12 @@ function App() {
         </header>
 
         <div className="lobby-body">
+          {kickedNotice && (
+            <div className="kicked-notice">
+              <span>⚠️ You were removed from that room by the host.</span>
+              <button className="kicked-dismiss" onClick={() => setKickedNotice(false)}>✕</button>
+            </div>
+          )}
           <div className="lobby-intro">
             <h2>Rooms Matched For You</h2>
             <p>Sorted by genre compatibility. Join one or start your own.</p>
@@ -557,7 +571,7 @@ function App() {
           <div className="room-info-block">
             <p className="room-id-label">Room</p>
             <p className="room-id-value">{roomState.roomId}</p>
-            {roomState.isPrivate && <span className="room-tag privacy-tag">🔒 Private</span>}
+            {roomState.isPrivate && <span className="room-tag privacy-tag">Private</span>}
             <button
               className="btn-ghost small"
               onClick={() => navigator.clipboard.writeText(window.location.href)}
@@ -577,9 +591,18 @@ function App() {
                       {u.id === roomState.hostId && <span className="host-crown" title="Host">👑</span>}
                       {u.name}
                     </span>
-                    <span className="participant-sprint-words">
-                      {(status === 'active' || status === 'finished') && `+${u.sprintWords.toLocaleString()} this sprint`}
-                    </span>
+                    <div className="participant-right">
+                      <span className="participant-sprint-words">
+                        {(status === 'active' || status === 'finished') && `+${u.sprintWords.toLocaleString()} this sprint`}
+                      </span>
+                      {isHost && u.id !== roomState.hostId && (
+                        <button
+                          className="btn-kick"
+                          title="Remove from room"
+                          onClick={() => ws.send(JSON.stringify({ type: 'KICK_USER', userId: u.id }))}
+                        >✕</button>
+                      )}
+                    </div>
                   </div>
                   {showWordCounts && u.goal > 0 && (
                     <div className="participant-wordcount">

@@ -185,6 +185,29 @@ serve({
             const room = rooms.get(ws.data.roomId);
             if (!room) return;
 
+            if (data.type === 'KICK_USER' && room.hostId === ws.data.id) {
+                const targetWs = [...room.users.keys()].find(w => w.data.id === data.userId);
+                if (targetWs) {
+                    // Boot the kicked user
+                    room.users.delete(targetWs);
+                    targetWs.data.roomId = null;
+                    targetWs.send(JSON.stringify({ type: 'KICKED' }));
+
+                    // Assign the room a new ID and make it private
+                    const newRoomId = genId();
+                    rooms.delete(ws.data.roomId);
+                    rooms.set(newRoomId, room);
+                    room.isPrivate = true;
+
+                    // Update all remaining users' roomId pointer and notify them
+                    for (const remainingWs of room.users.keys()) {
+                        remainingWs.data.roomId = newRoomId;
+                    }
+                    broadcastRoomState(newRoomId);
+                    updateAllLobbyUsers();
+                }
+            }
+
             if (data.type === 'CHAT') {
                 const user = room.users.get(ws);
                 room.chat.push({ name: user.name, text: data.text });
