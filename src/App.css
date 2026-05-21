@@ -778,6 +778,10 @@ textarea:focus {
   color: var(--text-light);
   padding: 0 0.1rem;
   width: 100%;
+}
+
+.progress-bar-track {
+  width: 100%;
   height: 6px;
   background: var(--border);
   border-radius: 99px;
@@ -1073,6 +1077,36 @@ textarea:focus {
   color: var(--text);
   transition: background 0.3s, color 0.3s;
   overflow-y: auto;
+  tab-size: 4;
+  -moz-tab-size: 4;
+}
+
+.read-sprint-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.read-sprint-heading {
+  margin-bottom: 0;
+  /* remove old margin, now handled by header row */
+}
+
+.read-author-you {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 99px;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+.read-export-btn {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .writing-area:focus {
@@ -1400,10 +1434,65 @@ textarea:focus {
   list-style: none;
   background: var(--surface);
   transition: background 0.15s;
+  justify-content: space-between;
 }
 
 .read-entry-summary::-webkit-details-marker {
   display: none;
+}
+
+/* 18+ tag */
+.adult-tag {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+[data-theme="dark"] .adult-tag {
+  background: #3b2200;
+  color: #fcd34d;
+  border-color: #92400e;
+}
+
+/* 18+ / generic modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 400px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-card h2 {
+  font-size: 1.2rem;
+}
+
+.modal-card p {
+  color: var(--text-light);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
 }
 
 .read-entry-summary::before {
