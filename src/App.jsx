@@ -103,6 +103,11 @@ function App() {
   const goalSetRef = useRef(false);
   const goalReachedRef = useRef(false);
 
+  const countWords = useCallback((value = '') => {
+    const text = String(value).trim();
+    return text === '' ? 0 : text.split(/\s+/).length;
+  }, []);
+
   useEffect(() => { appViewRef.current = appView; }, [appView]);
   useEffect(() => { myTextRef.current = myText; }, [myText]);
   useEffect(() => { roomStateRef.current = roomState; }, [roomState]);
@@ -166,7 +171,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!timeLeft) return;
+    if (!timeLeft || roomStateRef.current?.status === 'break') return;
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1000) { clearInterval(interval); return 0; }
@@ -174,7 +179,7 @@ function App() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [timeLeft]);
+  }, [timeLeft, roomState]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -291,6 +296,7 @@ function App() {
 
     if (data.type === 'CLEAR_TEXT') {
       setMyText('');
+      sprintStartWordsRef.current = manuscriptWordsRef.current || 0;
       setTimeLeft(null);
       setActivePane('write');
       setKeepWriting(false);
@@ -375,7 +381,7 @@ function App() {
   const handleEditorInput = () => {
     const text = editorRef.current?.innerText || '';
     const html = editorRef.current?.innerHTML || '';
-    const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+    const wordCount = countWords(text);
     setMyText(text);
     ws.send(JSON.stringify({ type: 'UPDATE_PROGRESS', wordCount, text: html }));
 
@@ -384,7 +390,33 @@ function App() {
     updateManuscript(updatedTotal, manuscriptGoal);
   };
 
+  const handleEditorPaste = (e) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) {
+      document.execCommand('insertText', false, text);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.setEndAfter(textNode);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
   const handleEditorKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      const key = e.key.toLowerCase();
+      if (key === 'b' || key === 'i' || key === 'u') {
+        e.preventDefault();
+        format(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline');
+        return;
+      }
+    }
     if (e.key === 'Tab') {
       e.preventDefault();
       if (e.shiftKey) {
@@ -504,10 +536,15 @@ function App() {
       duration_min: roomStateRef.current?.duration,
       writer_count: roomStateRef.current?.users?.length ?? 1,
     });
+    sprintStartWordsRef.current = manuscriptWordsRef.current || 0;
     ws.send(JSON.stringify({ type: 'START_SPRINT' }));
   };
 
-  const setupNewSprint = () => ws.send(JSON.stringify({ type: 'SETUP_NEW_SPRINT' }));
+  const setupNewSprint = () => {
+    setMyText('');
+    sprintStartWordsRef.current = manuscriptWordsRef.current || 0;
+    ws.send(JSON.stringify({ type: 'SETUP_NEW_SPRINT' }));
+  };
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -689,7 +726,7 @@ function App() {
   if (appView === 'room' && roomState) {
     const isHost = roomState.isHost;
     const status = roomState.status;
-    const myWordCount = myText.trim() === '' ? 0 : myText.trim().split(/\s+/).length;
+    const myWordCount = countWords(myText);
     const editorActive = status === 'active' || keepWriting;
 
     return (
@@ -962,6 +999,7 @@ function App() {
               contentEditable={editorActive}
               suppressContentEditableWarning
               onInput={handleEditorInput}
+              onPaste={handleEditorPaste}
               onKeyDown={handleEditorKeyDown}
               data-placeholder={
                 keepWriting ? 'Keep writing…' :

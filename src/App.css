@@ -752,9 +752,9 @@ textarea:focus {
 }
 
 .participant-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -839,6 +839,8 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .my-settings {
@@ -954,23 +956,11 @@ textarea:focus {
 }
 
 .status-bar.status-finished {
-  background: #f0f0ff;
+  background: var(--accent-soft-2);
 }
 
 .status-bar.status-break {
-  background: #fff7ed;
-}
-
-[data-theme="dark"] .status-bar.status-active {
-  background: #0d2a1e;
-}
-
-[data-theme="dark"] .status-bar.status-finished {
-  background: #1a1830;
-}
-
-[data-theme="dark"] .status-bar.status-break {
-  background: #2a1800;
+  background: var(--accent-soft);
 }
 
 .status-label {
@@ -1074,11 +1064,23 @@ textarea:focus {
   border-radius: 0;
   outline: none;
   background: var(--bg);
-  color: var(--text);
+  color: #111 !important;
+  caret-color: var(--text);
+  animation: blink-caret 0.9s steps(1) infinite;
   transition: background 0.3s, color 0.3s;
   overflow-y: auto;
   tab-size: 4;
   -moz-tab-size: 4;
+}
+
+.writing-area *,
+.read-text * {
+  color: inherit;
+}
+
+@keyframes blink-caret {
+  0%, 50% { caret-color: var(--text); }
+  50.01%, 100% { caret-color: transparent; }
 }
 
 .read-sprint-header {
@@ -1117,6 +1119,7 @@ textarea:focus {
   white-space: pre-wrap;
   word-break: break-word;
   cursor: text;
+  color: #111 !important;
 }
 
 .rich-editor[contenteditable="false"] {
